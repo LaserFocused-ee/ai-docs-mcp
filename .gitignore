@@ -10,6 +10,9 @@ dist/
 build/
 coverage/
 
+# Local files
+PUBLISHING.md
+
 # Environment and configuration
 .env
 .env.local
