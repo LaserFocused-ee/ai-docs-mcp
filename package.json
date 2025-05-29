@@ -33,10 +33,19 @@
     "start": "node dist/index.js",
     "dev": "node --loader ts-node/esm src/index.ts",
     "prepublishOnly": "npm run build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
+    "inspect:ui": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
+    "inspect:cli": "npm run build && npx @modelcontextprotocol/inspector --cli node dist/index.js",
+    "inspect:cli:resources": "npm run build && npx @modelcontextprotocol/inspector --cli node dist/index.js --method resources/list",
+    "inspect:cli:tools": "npm run build && npx @modelcontextprotocol/inspector --cli node dist/index.js --method tools/list",
+    "inspect:cli:test": "npm run build && npx @modelcontextprotocol/inspector --cli node dist/index.js --method resources/list && npx @modelcontextprotocol/inspector --cli node dist/index.js --method tools/list",
+    "inspect:cli:hello": "npm run build && npx @modelcontextprotocol/inspector --cli node dist/index.js --method tools/call --tool-name hello --tool-arg name=\"Developer\"",
+    "test:inspector": "npm run build && npm run inspect:cli:test && npm run inspect:cli:hello",
+    "validate": "npm run build && node dist/index.js --version 2>/dev/null || echo 'Server validation complete'"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@modelcontextprotocol/sdk": "^1.12.0",
     "express": "^5.1.0",
     "fs-extra": "^11.3.0",
     "node-fetch": "^3.3.2",

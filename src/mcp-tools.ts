@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs-extra';
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listAvailableDocuments, readMarkdownFile, getDocsDirectory } from './docs-utils.js';
 
 // Define server info
@@ -12,842 +12,89 @@ export const SERVER_INFO = {
 };
 
 /**
- * Configure MCP server with tools
+ * Configure MCP server with modern SDK 1.12.0 resource-only approach
  */
 export function configureServer(server: McpServer): void {
-  // List all available document tools
-  server.tool(
-    "list-documentation",
-    "Lists all available documentation files",
-    async () => {
-      const documents = await listAvailableDocuments();
 
-      // Create a flat list of all documents with full paths for better discoverability
-      const formattedDocs = documents.map(doc => {
-        const categoryPath = doc.category ? `${doc.category}/` : '';
+  // Register resource template for documentation
+  const docsTemplate = new ResourceTemplate(
+    "docs://{category}/{name}",
+    {
+      list: async () => {
+        const documents = await listAvailableDocuments();
         return {
-          displayName: `${categoryPath}${doc.name}`,
-          path: doc.path
+          resources: documents.map(doc => ({
+            uri: `docs://${doc.category}/${doc.name}`,
+            name: doc.name,
+            description: `${doc.category} documentation: ${doc.name}`,
+            mimeType: "text/markdown"
+          }))
         };
-      });
-
-      // Sort documents alphabetically
-      formattedDocs.sort((a, b) => a.displayName.localeCompare(b.displayName));
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: formattedDocs.length > 0 
-              ? "Available documentation:\n\n" + formattedDocs.map(doc => `- ${doc.displayName}`).join('\n')
-              : "Available documentation:\n\nNo documentation files found. Please check the docs directory path."
-          }
-        ]
-      };
+      }
     }
   );
 
-  // Generic documentation tool - get any documentation by category and name
-  server.tool(
-    "get-documentation",
-    "Retrieves documentation by category and name",
-    {
-      category: z.string().optional().describe("Documentation category (e.g., 'flutter/architecture')"),
-      name: z.string().describe("Documentation name without extension")
-    },
-    async ({ category, name }) => {
-      // List all available documents
-      const documents = await listAvailableDocuments();
+  server.resource(
+    "docs-template",
+    docsTemplate,
+    async (uri: URL, variables) => {
+      // Extract parameters from the URI variables (provided by the template engine)
+      // Variables can be string or string[], so we need to handle both
+      const category = Array.isArray(variables.category) ? variables.category[0] : variables.category;
+      const name = Array.isArray(variables.name) ? variables.name[0] : variables.name;
 
-      // Find the requested document
+      const documents = await listAvailableDocuments();
       const document = documents.find(doc =>
-        doc.name === name &&
-        (!category || doc.category === category)
+        doc.name === name && doc.category === category
       );
 
       if (!document) {
-        // If document not found with exact name, try partial match
-        const partialMatch = documents.find(doc =>
+        // Try fuzzy matching
+        const fuzzyMatch = documents.find(doc =>
           doc.name.includes(name) &&
-          (!category || doc.category === category)
+          doc.category.includes(category)
         );
 
-        if (partialMatch) {
-          const content = await readMarkdownFile(partialMatch.path);
+        if (fuzzyMatch) {
+          const content = await readMarkdownFile(fuzzyMatch.path);
           return {
-            content: [{
-              type: "text" as const,
-              text: `Found similar document: ${partialMatch.name}\n\n${content}`
+            contents: [{
+              uri: `docs://${fuzzyMatch.category}/${fuzzyMatch.name}`,
+              mimeType: "text/markdown",
+              text: content
             }]
           };
         }
 
-        throw new Error(`Documentation "${name}" ${category ? `in category "${category}" ` : ''}not found.`);
+        throw new Error(`Documentation not found: docs://${category}/${name}`);
       }
 
-      // Read and return the document content
       const content = await readMarkdownFile(document.path);
       return {
-        content: [{
-          type: "text" as const,
+        contents: [{
+          uri: `docs://${document.category}/${document.name}`,
+          mimeType: "text/markdown",
           text: content
         }]
       };
     }
   );
 
-  // Flutter documentation tool
+  // Example tool: Hello World
   server.tool(
-    "flutter",
-    "Returns all Flutter-related documentation",
+    "hello",
+    "A simple hello world example tool",
     {
-      name: z.string().optional().describe("Specific Flutter document name to retrieve")
+      name: z.string().optional().describe("Name to greet (optional)")
     },
     async ({ name }) => {
-      const documents = await listAvailableDocuments();
-      
-      // Filter Flutter-related documents
-      const flutterDocs = documents.filter(doc => 
-        doc.category.startsWith('code_guidelines/flutter')
-      );
-      
-      if (flutterDocs.length === 0) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: "No Flutter documentation found."
-          }]
-        };
-      }
-      
-      // If name is provided, get that specific document
-      if (name) {
-        const flutterDoc = flutterDocs.find(doc => 
-          doc.name === name || doc.name.includes(name)
-        );
-        
-        if (!flutterDoc) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Flutter document "${name}" not found. Available documents:\n\n` + 
-                flutterDocs.map(doc => `- ${doc.name}`).join('\n')
-            }]
-          };
-        }
-        
-        // Return the requested document
-        const content = await readMarkdownFile(flutterDoc.path);
-        return {
-          content: [{
-            type: "text" as const,
-            text: content
-          }]
-        };
-      }
-      
-      // Otherwise, list all Flutter documents
+      const greeting = name ? `Hello, ${name}!` : "Hello, World!";
       return {
         content: [{
-          type: "text" as const,
-          text: "Available Flutter documentation:\n\n" + 
-            flutterDocs.map(doc => `- ${doc.category}/${doc.name}`).join('\n')
+          type: "text",
+          text: `${greeting}\n\nThis is an example tool in the AI Documentation MCP Server.\n\nFor documentation access, use resources like:\n- docs://code_guidelines/flutter/best-practices\n- docs://service-docs/linear-sdk-documentation`
         }]
       };
     }
   );
-  
-  // Testing documentation tool
-  server.tool(
-    "testing",
-    "Returns testing documentation across all technologies",
-    {
-      technology: z.string().optional().describe("Filter testing docs by technology (e.g., \"flutter\", \"react\")"),
-      name: z.string().optional().describe("Specific testing document name to retrieve")
-    },
-    async ({ technology, name }) => {
-      const documents = await listAvailableDocuments();
-      
-      // Filter testing-related documents
-      const testingDocs = documents.filter(doc => 
-        doc.name.toLowerCase().includes('test') || 
-        doc.category.toLowerCase().includes('test')
-      );
-      
-      if (testingDocs.length === 0) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: "No testing documentation found."
-          }]
-        };
-      }
-      
-      // Filter by technology if provided
-      let filteredDocs = testingDocs;
-      if (technology) {
-        filteredDocs = testingDocs.filter(doc => 
-          doc.category.toLowerCase().includes(technology.toLowerCase())
-        );
-        
-        if (filteredDocs.length === 0) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `No testing documentation found for technology "${technology}". Available technologies:\n\n` + 
-                [...new Set(testingDocs.map(doc => doc.category.split('/')[0]))].join('\n')
-            }]
-          };
-        }
-      }
-      
-      // If name is provided, get that specific document
-      if (name) {
-        const testingDoc = filteredDocs.find(doc => 
-          doc.name === name || doc.name.includes(name)
-        );
-        
-        if (!testingDoc) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Testing document "${name}" not found. Available documents:\n\n` + 
-                filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-            }]
-          };
-        }
-        
-        // Return the requested document
-        const content = await readMarkdownFile(testingDoc.path);
-        return {
-          content: [{
-            type: "text" as const,
-            text: content
-          }]
-        };
-      }
-      
-      // Otherwise, list all testing documents
-      return {
-        content: [{
-          type: "text" as const,
-          text: "Available testing documentation:\n\n" + 
-            filteredDocs.map(doc => `- ${doc.category}/${doc.name}`).join('\n')
-        }]
-      };
-    }
-  );
-  
-  // Code guidelines documentation tool
-  server.tool(
-    "code-guidelines",
-    "Returns code guidelines documentation",
-    {
-      technology: z.string().optional().describe("Filter guidelines by technology (e.g., \"flutter\", \"react\", \"nestjs\")"),
-      name: z.string().optional().describe("Specific guideline document name to retrieve")
-    },
-    async ({ technology, name }) => {
-      const documents = await listAvailableDocuments();
-      
-      // Filter code guidelines documents
-      const guidelinesDocs = documents.filter(doc => 
-        doc.category.startsWith('code_guidelines')
-      );
-      
-      if (guidelinesDocs.length === 0) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: "No code guidelines documentation found."
-          }]
-        };
-      }
-      
-      // Filter by technology if provided
-      let filteredDocs = guidelinesDocs;
-      if (technology) {
-        filteredDocs = guidelinesDocs.filter(doc => 
-          doc.category.includes(`code_guidelines/${technology}`) 
-        );
-        
-        if (filteredDocs.length === 0) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `No code guidelines found for technology "${technology}". Available technologies:\n\n` + 
-                [...new Set(guidelinesDocs.map(doc => {
-                  const parts = doc.category.split('/');
-                  return parts.length > 1 ? parts[1] : 'general';
-                }))].join('\n')
-            }]
-          };
-        }
-      }
-      
-      // If name is provided, get that specific document
-      if (name) {
-        const guidelineDoc = filteredDocs.find(doc => 
-          doc.name === name || doc.name.includes(name)
-        );
-        
-        if (!guidelineDoc) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Guideline document "${name}" not found. Available documents:\n\n` + 
-                filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-            }]
-          };
-        }
-        
-        // Return the requested document
-        const content = await readMarkdownFile(guidelineDoc.path);
-        return {
-          content: [{
-            type: "text" as const,
-            text: content
-          }]
-        };
-      }
-      
-      // Otherwise, list all code guidelines documents
-      return {
-        content: [{
-          type: "text" as const,
-          text: "Available code guidelines documentation:\n\n" + 
-            filteredDocs.map(doc => `- ${doc.category}/${doc.name}`).join('\n')
-        }]
-      };
-    }
-  );
-  
-  // Service documentation tool
-  server.tool(
-    "service-docs",
-    "Returns service documentation",
-    {
-      service: z.string().optional().describe("Filter by service name"),
-      name: z.string().optional().describe("Specific service document name to retrieve")
-    },
-    async ({ service, name }) => {
-      const documents = await listAvailableDocuments();
-      
-      // Filter service documentation
-      const serviceDocs = documents.filter(doc => 
-        doc.category.startsWith('service-docs')
-      );
-      
-      if (serviceDocs.length === 0) {
-        return {
-          content: [{
-            type: "text" as const,
-            text: "No service documentation found."
-          }]
-        };
-      }
-      
-      // Filter by service if provided
-      let filteredDocs = serviceDocs;
-      if (service) {
-        filteredDocs = serviceDocs.filter(doc => 
-          doc.name.toLowerCase().includes(service.toLowerCase())
-        );
-        
-        if (filteredDocs.length === 0) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `No documentation found for service "${service}". Available service docs:\n\n` + 
-                serviceDocs.map(doc => `- ${doc.name}`).join('\n')
-            }]
-          };
-        }
-      }
-      
-      // If name is provided, get that specific document
-      if (name) {
-        const serviceDoc = filteredDocs.find(doc => 
-          doc.name === name || doc.name.includes(name)
-        );
-        
-        if (!serviceDoc) {
-          return {
-            content: [{
-              type: "text" as const,
-              text: `Service document "${name}" not found. Available documents:\n\n` + 
-                filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-            }]
-          };
-        }
-        
-        // Return the requested document
-        const content = await readMarkdownFile(serviceDoc.path);
-        return {
-          content: [{
-            type: "text" as const,
-            text: content
-          }]
-        };
-      }
-      
-      // Otherwise, list all service documents
-      return {
-        content: [{
-          type: "text" as const,
-          text: "Available service documentation:\n\n" + 
-            filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-        }]
-      };
-    }
-  );
-}
-
-/**
- * List all available tools for the server
- */
-export function getToolsList() {
-  return [
-    {
-      name: "list-documentation",
-      description: "Lists all available documentation files",
-      parameters: {}
-    },
-    {
-      name: "get-documentation",
-      description: "Retrieves documentation by category and name",
-      parameters: {
-        type: "object",
-        properties: {
-          category: {
-            type: "string",
-            description: "Documentation category (e.g., 'flutter/architecture')",
-            optional: true
-          },
-          name: {
-            type: "string",
-            description: "Documentation name without extension"
-          }
-        },
-        required: ["name"]
-      }
-    },
-    {
-      name: "flutter",
-      description: "Returns all Flutter-related documentation",
-      parameters: {
-        type: "object",
-        properties: {
-          name: {
-            type: "string",
-            description: "Specific Flutter document name to retrieve",
-            optional: true
-          }
-        }
-      }
-    },
-    {
-      name: "testing",
-      description: "Returns testing documentation across all technologies",
-      parameters: {
-        type: "object",
-        properties: {
-          technology: {
-            type: "string",
-            description: "Filter testing docs by technology (e.g., \"flutter\", \"react\")",
-            optional: true
-          },
-          name: {
-            type: "string",
-            description: "Specific testing document name to retrieve",
-            optional: true
-          }
-        }
-      }
-    },
-    {
-      name: "code-guidelines",
-      description: "Returns code guidelines documentation",
-      parameters: {
-        type: "object",
-        properties: {
-          technology: {
-            type: "string",
-            description: "Filter guidelines by technology (e.g., \"flutter\", \"react\", \"nestjs\")",
-            optional: true
-          },
-          name: {
-            type: "string",
-            description: "Specific guideline document name to retrieve",
-            optional: true
-          }
-        }
-      }
-    },
-    {
-      name: "service-docs",
-      description: "Returns service documentation",
-      parameters: {
-        type: "object",
-        properties: {
-          service: {
-            type: "string",
-            description: "Filter by service name",
-            optional: true
-          },
-          name: {
-            type: "string",
-            description: "Specific service document name to retrieve",
-            optional: true
-          }
-        }
-      }
-    }
-  ];
-}
-
-/**
- * Execute a tool by name with the given parameters
- */
-export async function executeToolByName(name: string, params: any = {}) {
-  // Directly execute the tool functions
-  if (name === "list-documentation") {
-    const documents = await listAvailableDocuments();
-
-    // Create a flat list of all documents with full paths for better discoverability
-    const formattedDocs = documents.map(doc => {
-      const categoryPath = doc.category ? `${doc.category}/` : '';
-      return {
-        displayName: `${categoryPath}${doc.name}`,
-        path: doc.path
-      };
-    });
-
-    // Sort documents alphabetically
-    formattedDocs.sort((a, b) => a.displayName.localeCompare(b.displayName));
-
-    return [{
-      content: [{
-        type: "text" as const,
-        text: formattedDocs.length > 0 
-          ? "Available documentation:\n\n" + formattedDocs.map(doc => `- ${doc.displayName}`).join('\n')
-          : "Available documentation:\n\nNo documentation files found. Please check the docs directory path."
-      }]
-    }];
-  } else if (name === "get-documentation") {
-    const category = params.category;
-    const name = params.name;
-
-    if (!name) {
-      throw new Error("Missing required parameter: name");
-    }
-
-    // List all available documents
-    const documents = await listAvailableDocuments();
-
-    // Find the requested document
-    const document = documents.find(doc =>
-      doc.name === name &&
-      (!category || doc.category === category)
-    );
-
-    if (!document) {
-      // If document not found with exact name, try partial match
-      const partialMatch = documents.find(doc =>
-        doc.name.includes(name) &&
-        (!category || doc.category === category)
-      );
-
-      if (partialMatch) {
-        const content = await readMarkdownFile(partialMatch.path);
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `Found similar document: ${partialMatch.name}\n\n${content}`
-          }]
-        }];
-      }
-
-      throw new Error(`Documentation "${name}" ${category ? `in category "${category}" ` : ''}not found.`);
-    }
-
-    // Read and return the document content
-    const content = await readMarkdownFile(document.path);
-    return [{
-      content: [{
-        type: "text" as const,
-        text: content
-      }]
-    }];
-  } else if (name === "flutter") {
-    const name = params.name;
-    const documents = await listAvailableDocuments();
-    
-    // Filter Flutter-related documents
-    const flutterDocs = documents.filter(doc => 
-      doc.category.startsWith('code_guidelines/flutter')
-    );
-    
-    if (flutterDocs.length === 0) {
-      return [{
-        content: [{
-          type: "text" as const,
-          text: "No Flutter documentation found."
-        }]
-      }];
-    }
-    
-    // If name is provided, get that specific document
-    if (name) {
-      const flutterDoc = flutterDocs.find(doc => 
-        doc.name === name || doc.name.includes(name)
-      );
-      
-      if (!flutterDoc) {
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `Flutter document "${name}" not found. Available documents:\n\n` + 
-              flutterDocs.map(doc => `- ${doc.name}`).join('\n')
-          }]
-        }];
-      }
-      
-      // Return the requested document
-      const content = await readMarkdownFile(flutterDoc.path);
-      return [{
-        content: [{
-          type: "text" as const,
-          text: content
-        }]
-      }];
-    }
-    
-    // Otherwise, list all Flutter documents
-    return [{
-      content: [{
-        type: "text" as const,
-        text: "Available Flutter documentation:\n\n" + 
-          flutterDocs.map(doc => `- ${doc.category}/${doc.name}`).join('\n')
-      }]
-    }];
-  } else if (name === "testing") {
-    const technology = params.technology;
-    const name = params.name;
-    const documents = await listAvailableDocuments();
-    
-    // Filter testing-related documents
-    const testingDocs = documents.filter(doc => 
-      doc.name.toLowerCase().includes('test') || 
-      doc.category.toLowerCase().includes('test')
-    );
-    
-    if (testingDocs.length === 0) {
-      return [{
-        content: [{
-          type: "text" as const,
-          text: "No testing documentation found."
-        }]
-      }];
-    }
-    
-    // Filter by technology if provided
-    let filteredDocs = testingDocs;
-    if (technology) {
-      filteredDocs = testingDocs.filter(doc => 
-        doc.category.toLowerCase().includes(technology.toLowerCase())
-      );
-      
-      if (filteredDocs.length === 0) {
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `No testing documentation found for technology "${technology}". Available technologies:\n\n` + 
-              [...new Set(testingDocs.map(doc => doc.category.split('/')[0]))].join('\n')
-          }]
-        }];
-      }
-    }
-    
-    // If name is provided, get that specific document
-    if (name) {
-      const testingDoc = filteredDocs.find(doc => 
-        doc.name === name || doc.name.includes(name)
-      );
-      
-      if (!testingDoc) {
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `Testing document "${name}" not found. Available documents:\n\n` + 
-              filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-          }]
-        }];
-      }
-      
-      // Return the requested document
-      const content = await readMarkdownFile(testingDoc.path);
-      return [{
-        content: [{
-          type: "text" as const,
-          text: content
-        }]
-      }];
-    }
-    
-    // Otherwise, list all testing documents
-    return [{
-      content: [{
-        type: "text" as const,
-        text: "Available testing documentation:\n\n" + 
-          filteredDocs.map(doc => `- ${doc.category}/${doc.name}`).join('\n')
-      }]
-    }];
-  } else if (name === "code-guidelines") {
-    const technology = params.technology;
-    const name = params.name;
-    const documents = await listAvailableDocuments();
-    
-    // Filter code guidelines documents
-    const guidelinesDocs = documents.filter(doc => 
-      doc.category.startsWith('code_guidelines')
-    );
-    
-    if (guidelinesDocs.length === 0) {
-      return [{
-        content: [{
-          type: "text" as const,
-          text: "No code guidelines documentation found."
-        }]
-      }];
-    }
-    
-    // Filter by technology if provided
-    let filteredDocs = guidelinesDocs;
-    if (technology) {
-      filteredDocs = guidelinesDocs.filter(doc => 
-        doc.category.includes(`code_guidelines/${technology}`)
-      );
-      
-      if (filteredDocs.length === 0) {
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `No code guidelines found for technology "${technology}". Available technologies:\n\n` + 
-              [...new Set(guidelinesDocs.map(doc => {
-                const parts = doc.category.split('/');
-                return parts.length > 1 ? parts[1] : 'general';
-              }))].join('\n')
-          }]
-        }];
-      }
-    }
-    
-    // If name is provided, get that specific document
-    if (name) {
-      const guidelineDoc = filteredDocs.find(doc => 
-        doc.name === name || doc.name.includes(name)
-      );
-      
-      if (!guidelineDoc) {
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `Guideline document "${name}" not found. Available documents:\n\n` + 
-              filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-          }]
-        }];
-      }
-      
-      // Return the requested document
-      const content = await readMarkdownFile(guidelineDoc.path);
-      return [{
-        content: [{
-          type: "text" as const,
-          text: content
-        }]
-      }];
-    }
-    
-    // Otherwise, list all code guidelines documents
-    return [{
-      content: [{
-        type: "text" as const,
-        text: "Available code guidelines documentation:\n\n" + 
-          filteredDocs.map(doc => `- ${doc.category}/${doc.name}`).join('\n')
-      }]
-    }];
-  } else if (name === "service-docs") {
-    const service = params.service;
-    const name = params.name;
-    const documents = await listAvailableDocuments();
-    
-    // Filter service documentation
-    const serviceDocs = documents.filter(doc => 
-      doc.category.startsWith('service-docs')
-    );
-    
-    if (serviceDocs.length === 0) {
-      return [{
-        content: [{
-          type: "text" as const,
-          text: "No service documentation found."
-        }]
-      }];
-    }
-    
-    // Filter by service if provided
-    let filteredDocs = serviceDocs;
-    if (service) {
-      filteredDocs = serviceDocs.filter(doc => 
-        doc.name.toLowerCase().includes(service.toLowerCase())
-      );
-      
-      if (filteredDocs.length === 0) {
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `No documentation found for service "${service}". Available service docs:\n\n` + 
-              serviceDocs.map(doc => `- ${doc.name}`).join('\n')
-          }]
-        }];
-      }
-    }
-    
-    // If name is provided, get that specific document
-    if (name) {
-      const serviceDoc = filteredDocs.find(doc => 
-        doc.name === name || doc.name.includes(name)
-      );
-      
-      if (!serviceDoc) {
-        return [{
-          content: [{
-            type: "text" as const,
-            text: `Service document "${name}" not found. Available documents:\n\n` + 
-              filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-          }]
-        }];
-      }
-      
-      // Return the requested document
-      const content = await readMarkdownFile(serviceDoc.path);
-      return [{
-        content: [{
-          type: "text" as const,
-          text: content
-        }]
-      }];
-    }
-    
-    // Otherwise, list all service documents
-    return [{
-      content: [{
-        type: "text" as const,
-        text: "Available service documentation:\n\n" + 
-          filteredDocs.map(doc => `- ${doc.name}`).join('\n')
-      }]
-    }];
-  } else {
-    throw new Error(`Unknown tool: ${name}`);
-  }
 }

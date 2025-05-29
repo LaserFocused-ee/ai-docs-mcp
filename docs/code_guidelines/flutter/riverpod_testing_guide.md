@@ -11,11 +11,6 @@
    - This bypasses all business logic and breaks encapsulation!
    - ✅ DO: Call public methods on the provider notifier to change state
    - ❌ DON'T: Directly set provider state with `.state = newState`
-   - Example of what NOT to do:
-     ```dart
-     // WRONG - Never do this
-     container.read(myProvider.notifier).state = AsyncData(newState);
-     ```
 
 3. **⛔️ NEVER USE DEPRECATED OVERRIDE METHODS**
    - ✅ DO: Use `.overrideWith((_) => mockImpl)` for all overrides
@@ -24,11 +19,11 @@
 ## 🔑 MANDATORY TESTING STRUCTURE
 
 1. **▶️ ALWAYS Use `runAsync` for Widget Tests With Providers**
+
    ```dart
    testWidgets('provider test', (tester) async {
      await tester.runAsync(() async {
        // All test code goes inside this block
-       // Setup, actions, and assertions
      });
    });
    ```
@@ -37,289 +32,369 @@
    - ✅ DO: `final container = getContainerFromWidget(tester, MyWidget);`
    - ❌ DON'T: Create standalone containers or access providers without the container
 
-## Test Setup Rules
+### Implementation of getContainerFromWidget
 
-1. **Register Fallback Values in `setUpAll`**
-   ```dart
-   setUpAll(() {
-     AsyncValueHelper.registerFallbackValues();
-     registerFallbackValue(FakeMyModel());
-   });
-   ```
-
-2. **Initialize Mocks in `setUp`**
-   ```dart
-   setUp(() {
-     mockRepository = MockRepository();
-     mockService = MockService();
-     
-     // Configure mock default responses
-     when(() => mockService.getData()).thenAnswer((_) async => ['data']);
-   });
-   ```
-
-3. **Provider Override Hierarchy**
-   ```dart
-   await tester.pumpWidget(
-     ProviderScope(
-       overrides: [
-         // ONLY override dependency providers
-         repositoryProvider.overrideWith((_) => mockRepository),
-         serviceProvider.overrideWith((_) => mockService),
-       ],
-       child: const MyWidget(),
-     ),
-   );
-   ```
-
-## Async Testing Workflow
-
-1. **Test Flow: Listen → Act → Pump → Assert**
-   - Listen: Set up state listeners before any actions
-   - Act: Perform actions that trigger state changes
-   - Pump: Handle async operations with strategic pumps
-   - Assert: Verify state and UI after changes complete
-
-2. **Set Up Listeners First**
-   ```dart
-   final container = getContainerFromWidget(tester, MyWidget);
-   
-   // Always register listeners before actions
-   final listener = Listener<AsyncValue<MyState>>();
-   container.listen(
-     myControllerProvider,
-     listener.call,
-     fireImmediately: true,
-   );
-   ```
-
-3. **Strategic Pump Sequence**
-   ```dart
-   // After triggering provider actions
-   await container.pump();  // Process provider async operations
-   await tester.pump();     // Update the UI with new state
-   await tester.pumpAndSettle();  // Handle animations (if needed)
-   ```
-
-## Verification Rules
-
-1. **Verify State Transitions**
-   ```dart
-   // Verify expected state sequence
-   verifyInOrder([
-     // Initial loading state
-     () => listener(null, any(that: isA<AsyncLoading<MyState>>())),
-     
-     // Final data state 
-     () => listener(
-       any(that: isA<AsyncLoading<MyState>>()),
-       any(that: isA<AsyncData<MyState>>()),
-     ),
-   ]);
-   ```
-
-2. **Verify UI State Matches Provider State**
-   ```dart
-   // Verify provider state
-   final state = container.read(myControllerProvider);
-   expect(state.valueOrNull?.someProperty, equals(expectedValue));
-   
-   // Verify matching UI state
-   expect(find.text(expectedValue.toString()), findsOneWidget);
-   ```
-
-3. **Verify Dependency Interactions**
-   ```dart
-   // Verify service method was called correctly
-   verify(() => mockService.getData(param: 'value')).called(1);
-   ```
-
-## Complete Example Templates
-
-### 1. Testing Loading/Success/Error Flow
+**IMPORTANT**: Either find `getContainerFromWidget` in your codebase or create this helper function. Do NOT use the raw implementation directly in your tests.
 
 ```dart
-testWidgets('loads data, handles success and errors correctly', (tester) async {
-  await tester.runAsync(() async {
-    // Configure mock response
-    when(() => mockService.getData())
-      .thenAnswer((_) async => ['data']);
+// Create this helper function in your test utilities
+ProviderContainer getContainerFromWidget(WidgetTester tester, Type widgetType) {
+  final element = tester.element(find.byType(widgetType));
+  return ProviderScope.containerOf(element);
+}
+
+// Complete example usage
+void main() {
+  testWidgets('provider test example', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(child: YourWidgetYouWantToTest()),
+    );
+
+    // ✅ DO: Use the helper function
+    final container = getContainerFromWidget(tester, YourWidgetYouWantToTest);
+
+    // Now interact with your providers
+    expect(
+      container.read(provider),
+      'some value',
+    );
+  });
+}
+```
+
+## Test Setup & Workflow
+
+### Setup Rules
+
+```dart
+setUpAll(() {
+  AsyncValueHelper.registerFallbackValues();
+  registerFallbackValue(FakeMyModel());
+});
+
+setUp(() {
+  mockRepository = MockRepository();
+  when(() => mockService.getData()).thenAnswer((_) async => ['data']);
+});
+```
+
+### AsyncValueHelper Implementation
+
+**IMPORTANT**: Either find `AsyncValueHelper` in your codebase or create this helper class for registering AsyncValue fallback values in tests.
+
+```dart
+// Create this helper class in your test utilities
+class AsyncValueHelper {
+  static void registerFallbackValues() {
+    // Register fallback values for all AsyncValue states
+    registerFallbackValue(const AsyncLoading<dynamic>());
+    registerFallbackValue(const AsyncData<dynamic>(null));
+    registerFallbackValue(AsyncError<dynamic>(Exception('test'), StackTrace.empty));
     
-    // Build widget
+    // Register common generic types you use in your app
+    registerFallbackValue(const AsyncLoading<String>());
+    registerFallbackValue(const AsyncData<String>(''));
+    registerFallbackValue(AsyncError<String>(Exception('test'), StackTrace.empty));
+    
+    registerFallbackValue(const AsyncLoading<List<dynamic>>());
+    registerFallbackValue(const AsyncData<List<dynamic>>([]));
+    registerFallbackValue(AsyncError<List<dynamic>>(Exception('test'), StackTrace.empty));
+    
+    // Add more specific types as needed for your domain models
+    // registerFallbackValue(const AsyncLoading<User>());
+    // registerFallbackValue(AsyncData<User>(User.empty()));
+    // registerFallbackValue(AsyncError<User>(Exception('test'), StackTrace.empty));
+  }
+}
+```
+
+### Listen → Act → Pump → Assert Pattern
+
+```dart
+await tester.runAsync(() async {
+  // Build widget with overrides
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        serviceProvider.overrideWith((_) => mockService), // ONLY override dependencies
+      ],
+      child: const MyWidget(),
+    ),
+  );
+  
+  final container = getContainerFromWidget(tester, MyWidget);
+  
+  // LISTEN: Set up state listener BEFORE actions
+  final listener = Listener<AsyncValue<MyState>>();
+  container.listen(myControllerProvider, listener.call, fireImmediately: true);
+  
+  // ACT: Trigger provider actions
+  container.read(myControllerProvider.notifier).performAction();
+  
+  // PUMP: Process async operations strategically
+  await container.pump();  // Process provider async operations
+  await tester.pump();     // Update the UI with new state
+  
+  // ASSERT: Verify state transitions and UI
+  verifyInOrder([
+    () => listener(null, any(that: isA<AsyncLoading<MyState>>())),
+    () => listener(any(), any(that: isA<AsyncData<MyState>>())),
+  ]);
+  expect(find.text('Expected UI'), findsOneWidget);
+});
+```
+
+## Testing Patterns by Provider Type
+
+### Classic Providers (StateNotifier)
+
+```dart
+testWidgets('classic provider handles state changes', (tester) async {
+  await tester.runAsync(() async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          serviceProvider.overrideWith((_) => mockService),
-        ],
+        overrides: [repositoryProvider.overrideWith((_) => mockRepository)],
         child: const MyWidget(),
       ),
     );
     
-    // Get container from widget
     final container = getContainerFromWidget(tester, MyWidget);
-    
-    // LISTEN: Set up state listener
     final listener = Listener<AsyncValue<MyState>>();
-    container.listen(
-      myControllerProvider,
-      listener.call,
-      fireImmediately: true,
-    );
+    container.listen(myControllerProvider, listener.call, fireImmediately: true);
     
-    // Initial loading state verification
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    // Trigger action through notifier method (never set state directly)
+    container.read(myControllerProvider.notifier).loadData();
     
-    // PUMP: Process async operations
     await container.pump();
     await tester.pump();
     
-    // SUCCESS STATE: Verify UI shows data
-    expect(find.text('data'), findsOneWidget);
-    
-    // Verify state transitions
-    verify(() => listener(null, any(that: isA<AsyncLoading<MyState>>()))).called(1);
-    verify(() => listener(
-      any(that: isA<AsyncLoading<MyState>>()),
-      any(that: isA<AsyncData<MyState>>()),
-    )).called(1);
-    
-    // TEST ERROR FLOW: Change mock to throw error
-    reset(mockService);
-    when(() => mockService.getData())
-      .thenThrow(Exception('Test error'));
-    
-    // Trigger reload
-    container.read(myControllerProvider.notifier).reload();
-    
-    // PUMP: Process async operations for error case
-    await container.pump();
-    await tester.pump();
-    
-    // Verify error UI
-    expect(find.text('Error: Test error'), findsOneWidget);
-    
-    // Verify error state transition
-    verify(() => listener(
-      any(that: isA<AsyncData<MyState>>()),
-      any(that: isA<AsyncError<MyState>>()),
-    )).called(1);
+    verify(() => mockRepository.getData()).called(1);
+    expect(find.text('Loaded Data'), findsOneWidget);
   });
 });
 ```
 
-### 2. Testing User Interactions
+### Code-Generated Providers (@riverpod)
 
 ```dart
-testWidgets('user interactions trigger correct provider methods', (tester) async {
+@riverpod
+class TodoList extends _$TodoList {
+  @override
+  Future<List<Todo>> build() async {
+    return ref.watch(todoRepositoryProvider).getAllTodos();
+  }
+  
+  Future<void> addTodo(String title) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final newTodo = await ref.read(todoRepositoryProvider).addTodo(title);
+      final currentList = await future;
+      return [...currentList, newTodo];
+    });
+  }
+}
+
+testWidgets('generated provider handles operations correctly', (tester) async {
   await tester.runAsync(() async {
-    // Build widget
+    when(() => mockTodoRepository.getAllTodos())
+        .thenAnswer((_) async => [Todo(id: '1', title: 'Existing')]);
+    when(() => mockTodoRepository.addTodo('New'))
+        .thenAnswer((_) async => Todo(id: '2', title: 'New'));
+    
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          repositoryProvider.overrideWith((_) => mockRepository),
-        ],
-        child: const MyInteractiveWidget(),
+        overrides: [todoRepositoryProvider.overrideWith((_) => mockTodoRepository)],
+        child: const TodoListWidget(),
       ),
     );
     
-    // Get container from widget
-    final container = getContainerFromWidget(tester, MyInteractiveWidget);
+    final container = getContainerFromWidget(tester, TodoListWidget);
+    final listener = Listener<AsyncValue<List<Todo>>>();
+    container.listen(todoListProvider, listener.call, fireImmediately: true);
     
-    // LISTEN: Set up listener for controller
-    final listener = Listener<AsyncValue<MyState>>();
-    container.listen(
-      myControllerProvider,
-      listener.call,
-      fireImmediately: true,
-    );
-    
-    // Verify initial state
-    expect(find.text('Initial State'), findsOneWidget);
-    
-    // ACT: Trigger user interaction
-    await tester.tap(find.byType(ElevatedButton));
-    
-    // PUMP: Update UI
-    await tester.pump();
     await container.pump();
     await tester.pump();
     
-    // Verify controller method was called
-    verify(() => mockRepository.saveItem(any())).called(1);
+    await container.read(todoListProvider.notifier).addTodo('New');
+    await container.pump();
+    await tester.pump();
     
-    // Verify state changed after user action
-    verify(() => listener(
-      any(that: isA<AsyncData<MyState>>()),
-      any(that: isA<AsyncData<MyState>>()),
-    )).called(1);
-    
-    // Verify UI updated
-    expect(find.text('Updated State'), findsOneWidget);
+    final finalState = container.read(todoListProvider);
+    expect(finalState.valueOrNull?.length, equals(2));
   });
 });
 ```
 
-## Special Testing Scenarios
-
-### 1. Testing Provider Initialization
+### Family Providers
 
 ```dart
-testWidgets('provider initializes with correct default state', (tester) async {
-  await tester.runAsync(() async {
-    // Build widget
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MyWidget(),
-      ),
-    );
-    
-    // Get container and initial state
-    final container = getContainerFromWidget(tester, MyWidget);
-    final initialState = container.read(myControllerProvider);
-    
-    // Verify initial state properties
-    expect(initialState.valueOrNull?.property, equals(defaultValue));
-    expect(find.text('Default Text'), findsOneWidget);
-  });
-});
-```
+@riverpod
+Future<User> user(UserRef ref, String userId) async {
+  return ref.watch(userRepositoryProvider).getUser(userId);
+}
 
-### 2. Testing Provider Side Effects
-
-```dart
-testWidgets('provider actions trigger appropriate side effects', (tester) async {
+testWidgets('family provider handles different parameters', (tester) async {
   await tester.runAsync(() async {
-    // Build widget with router mock for navigation testing
+    when(() => mockUserRepository.getUser('user1'))
+        .thenAnswer((_) async => User(id: 'user1', name: 'Alice'));
+    
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [
-          serviceProvider.overrideWith((_) => mockService),
-        ],
-        child: MockGoRouterProvider(
-          goRouter: mockRouter,
-          child: const MyWidget(),
-        ),
+        overrides: [userRepositoryProvider.overrideWith((_) => mockUserRepository)],
+        child: const UserProfileWidget(userId: 'user1'),
       ),
     );
     
-    // Get container
-    final container = getContainerFromWidget(tester, MyWidget);
+    final container = getContainerFromWidget(tester, UserProfileWidget);
     
-    // Trigger action with side effect
-    container.read(myControllerProvider.notifier).completeAction();
-    
-    // Process async operations
     await container.pump();
     await tester.pump();
     
-    // Verify side effects occurred
-    verify(() => mockRouter.push('/next-screen')).called(1);
-    verify(() => mockService.logCompletion()).called(1);
+    expect(find.text('Alice'), findsOneWidget);
+    
+    // Verify different family instances are independent
+    final user2State = container.read(userProvider('user2'));
+    expect(user2State, isA<AsyncLoading<User>>());
+    verifyNever(() => mockUserRepository.getUser('user2'));
   });
 });
 ```
 
-## 📋 Final Testing Checklist
+## Advanced Testing Scenarios
+
+### Provider Dependencies & Invalidation
+
+```dart
+testWidgets('provider dependencies and invalidation work correctly', (tester) async {
+  await tester.runAsync(() async {
+    var callCount = 0;
+    when(() => mockDataService.fetchData()).thenAnswer((_) async {
+      callCount++;
+      return 'Data $callCount';
+    });
+    
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dataServiceProvider.overrideWith((_) => mockDataService)],
+        child: const DataWidget(),
+      ),
+    );
+    
+    final container = getContainerFromWidget(tester, DataWidget);
+    
+    await container.pump();
+    await tester.pump();
+    expect(find.text('Data 1'), findsOneWidget);
+    
+    // Test invalidate
+    container.invalidate(dataProvider);
+    await container.pump();
+    await tester.pump();
+    expect(find.text('Data 2'), findsOneWidget);
+    
+    // Test refresh
+    await container.refresh(dataProvider);
+    await container.pump();
+    await tester.pump();
+    expect(find.text('Data 3'), findsOneWidget);
+    
+    verify(() => mockDataService.fetchData()).called(3);
+  });
+});
+```
+
+### Error Recovery & Retry
+
+```dart
+testWidgets('provider handles error recovery correctly', (tester) async {
+  await tester.runAsync(() async {
+    when(() => mockDataService.fetchData())
+        .thenThrow(Exception('Network error'))
+        .thenAnswer((_) async => 'Success data');
+    
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [dataServiceProvider.overrideWith((_) => mockDataService)],
+        child: const ResilientDataWidget(),
+      ),
+    );
+    
+    final container = getContainerFromWidget(tester, ResilientDataWidget);
+    final listener = Listener<AsyncValue<String>>();
+    container.listen(resilientDataProvider, listener.call, fireImmediately: true);
+    
+    // Initial load fails
+    await container.pump();
+    await tester.pump();
+    expect(find.text('Error: Network error'), findsOneWidget);
+    
+    // Retry and succeed
+    await container.read(resilientDataProvider.notifier).retry();
+    await container.pump();
+    await tester.pump();
+    expect(find.text('Success data'), findsOneWidget);
+    
+    // Verify state transitions: loading -> error -> loading -> success
+    verifyInOrder([
+      () => listener(null, any(that: isA<AsyncLoading<String>>())),
+      () => listener(any(), any(that: isA<AsyncError<String>>())),
+      () => listener(any(), any(that: isA<AsyncLoading<String>>())),
+      () => listener(any(), any(that: isA<AsyncData<String>>())),
+    ]);
+  });
+});
+```
+
+### keepAlive() Lifecycle Testing
+
+```dart
+testWidgets('keepAlive prevents provider disposal', (tester) async {
+  await tester.runAsync(() async {
+    var computeCallCount = 0;
+    when(() => mockExpensiveService.computeExpensiveData()).thenAnswer((_) async {
+      computeCallCount++;
+      return ExpensiveData(value: computeCallCount);
+    });
+    
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [expensiveServiceProvider.overrideWith((_) => mockExpensiveService)],
+        child: const ConditionalDataWidget(showData: true),
+      ),
+    );
+    
+    final container = getContainerFromWidget(tester, ConditionalDataWidget);
+    
+    await container.pump();
+    await tester.pump();
+    expect(computeCallCount, equals(1));
+    
+    // Hide widget (would normally dispose provider)
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [expensiveServiceProvider.overrideWith((_) => mockExpensiveService)],
+        child: const ConditionalDataWidget(showData: false),
+      ),
+    );
+    await tester.pump();
+    
+    // Show widget again - with keepAlive, computation should not run again
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [expensiveServiceProvider.overrideWith((_) => mockExpensiveService)],
+        child: const ConditionalDataWidget(showData: true),
+      ),
+    );
+    await tester.pump();
+    
+    expect(computeCallCount, equals(1)); // Still only called once
+  });
+});
+```
+
+## 📋 Complete Testing Checklist
+
+### Core Requirements
 
 ✅ Using `runAsync` for all widget tests with providers  
 ✅ Getting container from widget tree with `getContainerFromWidget`  
@@ -329,8 +404,20 @@ testWidgets('provider actions trigger appropriate side effects', (tester) async 
 ✅ Following Listen → Act → Pump → Assert pattern  
 ✅ Setting up listeners before actions  
 ✅ Using strategic pump sequences to handle async operations  
+
+### Verification Requirements
+
 ✅ Verifying both state transitions and UI updates  
 ✅ Testing loading, success, and error flows  
 ✅ Verifying interactions with dependencies  
 
-By following these rules consistently, you'll ensure thorough testing of Riverpod providers in Flutter applications with a focus on both state management and UI behavior.
+### Modern Riverpod Features
+
+✅ Testing code-generated providers with `@riverpod`  
+✅ Testing family providers with different parameters  
+✅ Testing provider dependencies and `ref.watch()` relationships  
+✅ Testing `ref.invalidate()` and `ref.refresh()` behavior  
+✅ Testing `keepAlive()` provider lifecycle  
+✅ Testing error recovery and retry patterns  
+
+By following these comprehensive rules, you'll ensure thorough testing of both classic and modern Riverpod providers in Flutter applications with a focus on both state management and UI behavior.
