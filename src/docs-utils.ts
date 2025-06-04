@@ -1,12 +1,34 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Get the docs directory path
  */
 export function getDocsDirectory(): string {
-  // Just use the docs directory directly inside dist
-  return path.join(path.dirname(process.argv[1]), 'docs');
+  // Get the directory of the current module
+  let baseDir: string;
+
+  if (import.meta.url) {
+    // ESM: use import.meta.url (most reliable)
+    const currentFile = fileURLToPath(import.meta.url);
+    baseDir = path.dirname(currentFile);
+  } else if (process.argv[1]) {
+    // When run normally, use the script path
+    baseDir = path.dirname(process.argv[1]);
+  } else {
+    // Last resort fallback
+    baseDir = process.cwd();
+    if (fs.existsSync(path.join(baseDir, 'dist'))) {
+      baseDir = path.join(baseDir, 'dist');
+    }
+  }
+
+  // The docs should be in the same directory as this compiled file
+  // When packaged, both docs-utils.js and docs/ will be in the dist/ directory
+  const docsPath = path.join(baseDir, 'docs');
+
+  return docsPath;
 }
 
 /**
@@ -16,7 +38,6 @@ export async function readMarkdownFile(filePath: string): Promise<string> {
   try {
     return await fs.readFile(filePath, 'utf-8');
   } catch (error) {
-    console.error(`Error reading file ${filePath}:`, error);
     throw new Error(`Failed to read file: ${filePath}`);
   }
 }
@@ -26,33 +47,29 @@ export async function readMarkdownFile(filePath: string): Promise<string> {
  */
 export async function listAvailableDocuments(): Promise<Array<{ category: string; name: string; path: string }>> {
   const docsDirectory = getDocsDirectory();
-  console.error(`Looking for docs in: ${docsDirectory}`);
-  
+
   const documents: Array<{ category: string; name: string; path: string }> = [];
 
   try {
     // Check if directory exists
     if (!await fs.pathExists(docsDirectory)) {
-      console.error("Documentation directory not found:", docsDirectory);
-      console.error("Current working directory:", process.cwd());
-      console.error("Script path:", process.argv[1]);
       return [];
     }
-    
+
     // Function to recursively scan directories
     async function scanDirectory(dirPath: string, category: string = ''): Promise<void> {
       try {
         const items = await fs.readdir(dirPath, { withFileTypes: true });
-        
+
         for (const item of items) {
           const itemPath = path.join(dirPath, item.name);
-          
+
           if (item.isDirectory()) {
             // Add subdirectory to category path
-            const newCategory = category 
-              ? `${category}/${item.name}` 
+            const newCategory = category
+              ? `${category}/${item.name}`
               : item.name;
-            
+
             // Skip hidden directories
             if (!item.name.startsWith('.')) {
               await scanDirectory(itemPath, newCategory);
@@ -68,14 +85,13 @@ export async function listAvailableDocuments(): Promise<Array<{ category: string
           }
         }
       } catch (err) {
-        console.error(`Error scanning directory ${dirPath}:`, err);
+        // Silently skip directories that can't be read
       }
     }
-    
+
     await scanDirectory(docsDirectory);
     return documents;
   } catch (error) {
-    console.error("Error scanning documentation directory:", error);
     return [];
   }
 }

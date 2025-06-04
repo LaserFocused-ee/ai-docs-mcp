@@ -29,6 +29,22 @@ jobs:
     - name: Build
       run: npm run build
       
+    - name: Validate MCP Server
+      run: npm run test:inspector
+      
+    - name: Validate Package Contents
+      run: |
+        npm pack --dry-run > pack-output.txt
+        echo "Checking that docs are included in package..."
+        if grep -q "dist/docs/" pack-output.txt; then
+          echo "✅ Docs are included in package"
+          grep "dist/docs/" pack-output.txt
+        else
+          echo "❌ Docs are missing from package"
+          cat pack-output.txt
+          exit 1
+        fi
+      
     # Uncomment when you add tests
     # - name: Test
     #   run: npm test

@@ -17,7 +17,11 @@ const server = new McpServer({
   version: SERVER_INFO.version,
   description: SERVER_INFO.description,
   capabilities: {
-    tools: {}
+    tools: {},
+    resources: {
+      subscribe: true,
+      listChanged: true
+    }
   }
 });
 
@@ -29,7 +33,7 @@ async function main() {
   // Create and connect to the stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  
+
   // Only log minimal info to stderr to avoid cluttering logs
   console.error("AI-Docs MCP Server running on stdio");
 }
