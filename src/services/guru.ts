@@ -53,7 +53,8 @@ export class GuruService {
             throw new Error(`Guru API error (${response.status}): ${errorText}`);
         }
 
-        return response.json();
+        const jsonResponse = await response.json();
+        return jsonResponse;
     }
 
     /**

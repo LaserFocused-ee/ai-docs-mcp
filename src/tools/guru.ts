@@ -8,6 +8,8 @@ import { GuruService } from '../services/guru.js';
 export function configureGuruTools(server: McpServer): void {
     const guruService = new GuruService();
 
+
+
     // Tool to list/search Guru cards
     server.tool(
         "guru-list-cards",
@@ -33,7 +35,26 @@ export function configureGuruTools(server: McpServer): void {
 
                 const response = await guruService.searchCards(searchParams);
 
-                if (response.results.length === 0) {
+                // Handle different response formats
+                let cards: any[];
+                let totalResults: number | undefined;
+                let hasMore: boolean | undefined;
+
+                if (Array.isArray(response)) {
+                    // Direct array response (what we're actually getting)
+                    cards = response;
+                    totalResults = response.length;
+                    hasMore = false;
+                } else if (response && typeof response === 'object' && Array.isArray(response.results)) {
+                    // Expected object with results array
+                    cards = response.results;
+                    totalResults = response.totalResults;
+                    hasMore = response.hasMore;
+                } else {
+                    throw new Error(`Invalid response structure: ${JSON.stringify(response)}`);
+                }
+
+                if (cards.length === 0) {
                     return {
                         content: [{
                             type: "text",
@@ -42,21 +63,29 @@ export function configureGuruTools(server: McpServer): void {
                     };
                 }
 
-                const cardsList = response.results.map(card => {
-                    const preview = card.content.replace(/<[^>]*>/g, '').substring(0, 200);
-                    return `## ${card.title}\n` +
+                const cardsList = cards.map(card => {
+                    const title = card.preferredPhrase || card.title || 'Untitled';
+                    const preview = card.content ? card.content.replace(/<[^>]*>/g, '').substring(0, 200) : 'No content';
+                    const collection = card.collection ? card.collection.name : 'Unknown Collection';
+                    const owner = card.owner ? `${card.owner.firstName || ''} ${card.owner.lastName || ''}`.trim() : 'Unknown Owner';
+
+                    return `## ${title}\n` +
                         `**ID:** ${card.id}\n` +
-                        `**Collection:** ${card.collection.name}\n` +
-                        `**Last Modified:** ${card.lastModified}\n` +
-                        `**Owner:** ${card.owner.firstName} ${card.owner.lastName}\n` +
-                        `**Status:** ${card.verificationState}\n` +
+                        `**Collection:** ${collection}\n` +
+                        `**Last Modified:** ${card.lastModified || 'Unknown'}\n` +
+                        `**Owner:** ${owner}\n` +
+                        `**Status:** ${card.verificationState || 'Unknown'}\n` +
                         `**Preview:** ${preview}${preview.length >= 200 ? '...' : ''}\n`;
                 }).join('\n---\n');
+
+                const summaryText = totalResults !== undefined && hasMore !== undefined
+                    ? `Found ${cards.length} cards (Total: ${totalResults}, Has More: ${hasMore})`
+                    : `Found ${cards.length} cards`;
 
                 return {
                     content: [{
                         type: "text",
-                        text: `Found ${response.results.length} cards (Total: ${response.totalResults}, Has More: ${response.hasMore}):\n\n${cardsList}`
+                        text: `${summaryText}:\n\n${cardsList}`
                     }]
                 };
             } catch (error) {
