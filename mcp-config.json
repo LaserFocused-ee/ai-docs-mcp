@@ -4,7 +4,8 @@
       "command": "node",
       "args": ["dist/index.js"],
       "env": {
-        "NODE_ENV": "production"
+        "NODE_ENV": "production",
+        "GURU_TOKEN": "your_username:your_user_token"
       }
     },
     "ai-docs-dev": {
@@ -12,7 +13,8 @@
       "args": ["run", "dev"],
       "env": {
         "NODE_ENV": "development",
-        "DEBUG": "true"
+        "DEBUG": "true",
+        "GURU_TOKEN": "your_username:your_user_token"
       }
     }
   }
