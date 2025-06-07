@@ -247,6 +247,8 @@ export class MarkdownParser {
         return nodes.map(node => {
             if (node.type === 'text') {
                 return { type: 'text' as const, content: node.value };
+            } else if (node.type === 'break') {
+                return { type: 'text' as const, content: '\n' }; // Preserve hard line breaks
             } else if (node.type === 'strong') {
                 return {
                     type: 'text' as const,
@@ -293,6 +295,7 @@ export class MarkdownParser {
         return children
             .map(child => {
                 if (child.type === 'text') return child.value;
+                if (child.type === 'break') return '\n'; // Preserve hard line breaks
                 if (child.children) return this.extractTextContent(child.children);
                 return '';
             })
