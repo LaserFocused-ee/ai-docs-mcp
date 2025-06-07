@@ -5,16 +5,20 @@
       "args": ["dist/index.js"],
       "env": {
         "NODE_ENV": "production",
-        "GURU_TOKEN": "your_username:your_user_token"
+        "GURU_TOKEN": "your_username:your_user_token",
+        "NOTION_TOKEN": "your_notion_integration_token",
+        "NOTION_MCP_DATABASE_ID": "db-uuid"
       }
     },
     "ai-docs-dev": {
-      "command": "npm",
-      "args": ["run", "dev"],
+      "command": "node",
+      "args": ["dist/index.js"],
       "env": {
         "NODE_ENV": "development",
         "DEBUG": "true",
-        "GURU_TOKEN": "your_username:your_user_token"
+        "GURU_TOKEN": "your_username:your_user_token",
+        "NOTION_TOKEN": "your_notion_integration_token",
+        "NOTION_MCP_DATABASE_ID": "db-uuid"
       }
     }
   }

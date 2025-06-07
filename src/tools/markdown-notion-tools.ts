@@ -104,18 +104,25 @@ export async function notionToMarkdownTool({ blocks, options }: {
 /**
  * MCP Tool: Create a Notion page from markdown content
  */
-export async function createPageFromMarkdownTool({ markdown, parentId, pageTitle, options }: {
+export async function createPageFromMarkdownTool({ markdown, parentId, pageTitle, options, metadata }: {
     markdown: string;
     parentId: string;
     pageTitle?: string;
     options?: Partial<ConversionOptions>;
+    metadata?: {
+        category?: string;
+        tags?: string[];
+        description?: string;
+        status?: string;
+    };
 }) {
     try {
         const result = await getConverter().createPageFromMarkdown(
             markdown,
             parentId,
             pageTitle,
-            options
+            options,
+            metadata
         );
 
         return {
@@ -164,16 +171,23 @@ export async function exportPageToMarkdownTool({ pageId, options }: {
 /**
  * MCP Tool: Create a Notion page from a markdown file
  */
-export async function createPageFromFileTool({ filePath, parentId, options }: {
+export async function createPageFromFileTool({ filePath, parentId, options, metadata }: {
     filePath: string;
     parentId: string;
     options?: Partial<ConversionOptions>;
+    metadata?: {
+        category?: string;
+        tags?: string[];
+        description?: string;
+        status?: string;
+    };
 }) {
     try {
         const result = await getConverter().createPageFromFile(
             filePath,
             parentId,
-            options
+            options,
+            metadata
         );
 
         return {
@@ -419,7 +433,13 @@ export const markdownNotionTools = {
             markdown: z.string().describe('Markdown content'),
             parentId: z.string().describe('Parent page or database ID'),
             pageTitle: z.string().optional().describe('Page title (optional)'),
-            options: conversionOptionsSchema
+            options: conversionOptionsSchema,
+            metadata: z.object({
+                category: z.string().optional().describe('Category (e.g., best-practices, architecture, api-reference, testing, examples, guides, reference)'),
+                tags: z.array(z.string()).optional().describe('Tags array (e.g., ["flutter", "riverpod", "testing"])'),
+                description: z.string().optional().describe('Page description'),
+                status: z.string().optional().describe('Status (e.g., published, draft, archived)')
+            }).optional().describe('Metadata for the page')
         },
         handler: createPageFromMarkdownTool
     },
@@ -439,7 +459,13 @@ export const markdownNotionTools = {
         inputSchema: {
             filePath: z.string().describe('Path to markdown file'),
             parentId: z.string().describe('Parent page or database ID'),
-            options: conversionOptionsSchema
+            options: conversionOptionsSchema,
+            metadata: z.object({
+                category: z.string().optional().describe('Category (e.g., best-practices, architecture, api-reference, testing, examples, guides, reference)'),
+                tags: z.array(z.string()).optional().describe('Tags array (e.g., ["flutter", "riverpod", "testing"])'),
+                description: z.string().optional().describe('Page description'),
+                status: z.string().optional().describe('Status (e.g., published, draft, archived)')
+            }).optional().describe('Metadata for the page (will be merged with auto-extracted metadata)')
         },
         handler: createPageFromFileTool
     },

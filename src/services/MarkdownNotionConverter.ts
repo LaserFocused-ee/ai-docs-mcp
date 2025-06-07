@@ -124,7 +124,13 @@ export class MarkdownNotionConverter {
         markdown: string,
         parentId: string,
         pageTitle?: string,
-        options: Partial<ConversionOptions> = {}
+        options: Partial<ConversionOptions> = {},
+        metadata?: {
+            category?: string;
+            tags?: string[];
+            description?: string;
+            status?: string;
+        }
     ): Promise<{ page: NotionPage; conversionResult: ConversionResult }> {
         try {
             // Convert markdown to blocks
@@ -145,21 +151,67 @@ export class MarkdownNotionConverter {
             // Create page in database (parentId must be a database ID)
             const parent = { type: 'database_id' as const, database_id: parentId };
 
-            // Create the page
+            // Build page properties
+            const properties: any = {
+                title: {
+                    title: [
+                        {
+                            text: {
+                                content: pageTitle || 'Untitled'
+                            }
+                        }
+                    ]
+                }
+            };
+
+            // Ensure database has required properties if metadata is provided
+            if (metadata && Object.keys(metadata).length > 0) {
+                await this.ensureDatabaseProperties(parentId);
+            }
+
+            // Add metadata properties if provided
+            if (metadata?.category) {
+                properties.Category = {
+                    select: { name: metadata.category }
+                };
+            }
+
+            if (metadata?.tags && metadata.tags.length > 0) {
+                properties.Tags = {
+                    multi_select: metadata.tags.map(tag => ({ name: tag }))
+                };
+            }
+
+            if (metadata?.description) {
+                properties.Description = {
+                    rich_text: [
+                        {
+                            text: { content: metadata.description }
+                        }
+                    ]
+                };
+            }
+
+            if (metadata?.status) {
+                properties.Status = {
+                    select: { name: metadata.status }
+                };
+            }
+
+            // Create the page with metadata
             const page = await this.notionService.createPage({
                 parent,
-                properties: {
-                    title: {
-                        title: [
-                            {
-                                text: {
-                                    content: pageTitle || 'Untitled'
-                                }
-                            }
-                        ]
-                    }
-                }
+                properties
             });
+
+            if (metadata) {
+                console.log('✅ Page created with metadata:', {
+                    category: metadata.category,
+                    tags: metadata.tags,
+                    description: metadata.description,
+                    status: metadata.status
+                });
+            }
 
             // Add blocks to the page if any
             if (blocks.length > 0) {
@@ -205,7 +257,13 @@ export class MarkdownNotionConverter {
     async createPageFromFile(
         filePath: string,
         parentId: string,
-        options: Partial<ConversionOptions> = {}
+        options: Partial<ConversionOptions> = {},
+        additionalMetadata?: {
+            category?: string;
+            tags?: string[];
+            description?: string;
+            status?: string;
+        }
     ): Promise<{ page: NotionPage; conversionResult: ConversionResult; document: MarkdownDocument }> {
         try {
             // Validate file path
@@ -225,12 +283,22 @@ export class MarkdownNotionConverter {
                 throw new Error(`File too large: ${document.size} bytes (max: ${this.config.maxFileSize})`);
             }
 
+            // Extract metadata automatically from file path and content
+            const autoMetadata = this.extractMetadataFromFile(filePath, document);
+
+            // Merge with any additional metadata provided
+            const finalMetadata = {
+                ...autoMetadata,
+                ...additionalMetadata
+            };
+
             // Create page from content
             const { page, conversionResult } = await this.createPageFromMarkdown(
                 content,
                 parentId,
                 document.metadata.title,
-                options
+                options,
+                finalMetadata
             );
 
             return { page, conversionResult, document };
@@ -443,5 +511,153 @@ export class MarkdownNotionConverter {
             }
         }
         return 'Untitled';
+    }
+
+    /**
+     * Extract metadata from file path and markdown content
+     */
+    private extractMetadataFromFile(filePath: string, document: MarkdownDocument): {
+        category?: string;
+        tags?: string[];
+        description?: string;
+        status?: string;
+    } {
+        const metadata: any = {};
+
+        // Extract category from file path
+        if (filePath.includes('code_guidelines')) {
+            metadata.category = 'best-practices';
+        } else if (filePath.includes('architecture')) {
+            metadata.category = 'architecture';
+        } else if (filePath.includes('api')) {
+            metadata.category = 'api-reference';
+        } else if (filePath.includes('testing')) {
+            metadata.category = 'testing';
+        } else if (filePath.includes('example')) {
+            metadata.category = 'examples';
+        } else if (filePath.includes('guide')) {
+            metadata.category = 'guides';
+        } else {
+            metadata.category = 'reference';
+        }
+
+        // Extract tags from file path and content
+        const tags: string[] = [];
+
+        // Technology tags
+        if (filePath.includes('flutter') || document.metadata.title?.toLowerCase().includes('flutter')) {
+            tags.push('flutter');
+        }
+        if (filePath.includes('dart')) tags.push('dart');
+        if (filePath.includes('riverpod') || document.metadata.title?.toLowerCase().includes('riverpod')) {
+            tags.push('riverpod');
+        }
+        if (filePath.includes('react')) tags.push('react');
+        if (filePath.includes('nestjs')) tags.push('nestjs');
+        if (filePath.includes('typescript')) tags.push('typescript');
+        if (filePath.includes('testing') || document.metadata.title?.toLowerCase().includes('testing')) {
+            tags.push('testing');
+        }
+
+        // Content type tags
+        if (document.metadata.title?.toLowerCase().includes('rulebook')) {
+            tags.push('rulebook');
+        }
+        if (document.metadata.title?.toLowerCase().includes('guide')) {
+            tags.push('guide');
+        }
+        if (document.metadata.title?.toLowerCase().includes('best practices')) {
+            tags.push('best-practices');
+        }
+
+        // Framework/library specific
+        if (document.metadata.title?.toLowerCase().includes('state') ||
+            filePath.includes('state')) {
+            tags.push('state-management');
+        }
+
+        metadata.tags = tags;
+
+        // Use existing frontmatter metadata if available
+        if (document.metadata.description) {
+            metadata.description = document.metadata.description;
+        }
+
+        // Check frontMatter for status or set default
+        metadata.status = document.metadata.frontMatter?.status || 'published';
+
+        return metadata;
+    }
+
+    /**
+     * Ensure database has required metadata properties
+     */
+    private async ensureDatabaseProperties(databaseId: string): Promise<void> {
+        try {
+            // Get current database properties
+            const database = await this.notionService.getDatabase(databaseId);
+            const existingProperties = database.properties;
+
+            const requiredProperties: any = {};
+
+            // Add Category property if it doesn't exist
+            if (!existingProperties.Category) {
+                requiredProperties.Category = {
+                    select: {
+                        options: [
+                            { name: 'best-practices', color: 'blue' },
+                            { name: 'architecture', color: 'purple' },
+                            { name: 'api-reference', color: 'green' },
+                            { name: 'testing', color: 'yellow' },
+                            { name: 'examples', color: 'orange' },
+                            { name: 'guides', color: 'red' },
+                            { name: 'reference', color: 'gray' }
+                        ]
+                    }
+                };
+            }
+
+            // Add Tags property if it doesn't exist
+            if (!existingProperties.Tags) {
+                requiredProperties.Tags = {
+                    multi_select: {
+                        options: []
+                    }
+                };
+            }
+
+            // Add Description property if it doesn't exist
+            if (!existingProperties.Description) {
+                requiredProperties.Description = {
+                    rich_text: {}
+                };
+            }
+
+            // Add Status property if it doesn't exist
+            if (!existingProperties.Status) {
+                requiredProperties.Status = {
+                    select: {
+                        options: [
+                            { name: 'published', color: 'green' },
+                            { name: 'draft', color: 'yellow' },
+                            { name: 'archived', color: 'gray' }
+                        ]
+                    }
+                };
+            }
+
+            // Update database if any properties need to be added
+            if (Object.keys(requiredProperties).length > 0) {
+                console.log('🔧 Adding missing database properties:', Object.keys(requiredProperties));
+                await this.notionService.updateDatabase(databaseId, {
+                    properties: requiredProperties
+                });
+                console.log('✅ Database properties updated successfully');
+            }
+
+        } catch (error) {
+            console.warn('⚠️ Failed to ensure database properties:', error);
+            // Don't throw error - we'll still try to create the page
+        }
     }
 } 

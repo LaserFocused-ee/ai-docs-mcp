@@ -86,6 +86,10 @@ export class NotionService {
         );
     }
 
+    async updateDatabase(databaseId: string, updateData: any): Promise<NotionDatabase> {
+        return this.makeRequest<NotionDatabase>(`/databases/${databaseId}`, 'PATCH', updateData);
+    }
+
     // Page operations
     async getPage(pageId: string): Promise<NotionPage> {
         return this.makeRequest<NotionPage>(`/pages/${pageId}`);
@@ -97,6 +101,12 @@ export class NotionService {
 
     async updatePage(pageId: string, request: UpdatePageRequest): Promise<NotionPage> {
         return this.makeRequest<NotionPage>(`/pages/${pageId}`, 'PATCH', request);
+    }
+
+    async archivePage(pageId: string): Promise<NotionPage> {
+        return this.makeRequest<NotionPage>(`/pages/${pageId}`, 'PATCH', {
+            archived: true
+        });
     }
 
     // Block operations
