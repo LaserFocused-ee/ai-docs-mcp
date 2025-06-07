@@ -279,7 +279,26 @@ function convertListItem(
     unsupportedBlocks: string[],
     listType?: 'bulleted' | 'numbered'
 ): NotionBlockData[] {
-    const content = node.children || node.content || '';
+    // Extract text content from children if available, otherwise use direct content
+    let content: string | MarkdownNode[] = '';
+
+    if (node.children && Array.isArray(node.children)) {
+        // Check if first child is a paragraph containing the text content
+        const firstChild = node.children[0];
+        if (firstChild && firstChild.type === 'paragraph' && firstChild.children) {
+            content = firstChild.children; // Use the paragraph's children for rich text
+        } else {
+            // Extract text content from all text nodes
+            const textNodes = node.children.filter(child => child.type === 'text');
+            if (textNodes.length > 0) {
+                content = textNodes;
+            } else {
+                content = node.content || '';
+            }
+        }
+    } else {
+        content = node.content || '';
+    }
 
     // Determine list type
     let type: 'bulleted' | 'numbered' | 'todo' = listType || 'bulleted';
@@ -289,13 +308,17 @@ function convertListItem(
         type = 'todo';
     }
 
-    // Convert nested children
+    // Convert nested children (skip the first paragraph if it was used for content)
     let childBlocks: NotionBlockData[] = [];
     if (node.children && Array.isArray(node.children)) {
-        // Filter out text content and process only block-level children
-        const blockChildren = node.children.filter(child =>
-            ['list', 'paragraph', 'code', 'quote'].includes(child.type)
-        );
+        const blockChildren = node.children.filter((child, index) => {
+            // Skip first paragraph if it was used for content
+            if (index === 0 && child.type === 'paragraph' && Array.isArray(content)) {
+                return false;
+            }
+            // Include block-level children
+            return ['list', 'paragraph', 'code', 'quote'].includes(child.type);
+        });
 
         if (blockChildren.length > 0) {
             childBlocks = convertNodeArray(blockChildren, options, warnings, errors, unsupportedBlocks);

@@ -142,9 +142,12 @@ export class MarkdownNotionConverter {
                 pageTitle = doc.metadata.title || 'Untitled';
             }
 
+            // Create page in database (parentId must be a database ID)
+            const parent = { type: 'database_id' as const, database_id: parentId };
+
             // Create the page
             const page = await this.notionService.createPage({
-                parent: { type: 'page_id', page_id: parentId },
+                parent,
                 properties: {
                     title: {
                         title: [

@@ -14,8 +14,9 @@ function getNotionService(): NotionService {
     });
 }
 
-// MCP Access Database ID (hardcoded as per conversation)
-const MCP_ACCESS_DATABASE_ID = '20906f52-e1c0-80b9-9479-fcbe9e201770';
+// MCP Access Database ID from environment variable
+const MCP_ACCESS_DATABASE_ID = process.env.NOTION_MCP_DATABASE_ID ||
+    (() => { throw new Error('NOTION_MCP_DATABASE_ID environment variable is required'); })();
 
 export const notionTools: Tool[] = [
     // MCP Access Database Tools
