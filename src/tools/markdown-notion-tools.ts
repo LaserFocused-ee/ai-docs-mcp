@@ -104,9 +104,8 @@ export async function notionToMarkdownTool({ blocks, options }: {
 /**
  * MCP Tool: Create a Notion page from markdown content
  */
-export async function createPageFromMarkdownTool({ markdown, parentId, pageTitle, options, metadata }: {
+export async function createPageFromMarkdownTool({ markdown, pageTitle, options, metadata }: {
     markdown: string;
-    parentId: string;
     pageTitle?: string;
     options?: Partial<ConversionOptions>;
     metadata?: {
@@ -117,9 +116,14 @@ export async function createPageFromMarkdownTool({ markdown, parentId, pageTitle
     };
 }) {
     try {
+        const databaseId = process.env.NOTION_MCP_DATABASE_ID;
+        if (!databaseId) {
+            throw new Error('NOTION_MCP_DATABASE_ID environment variable is required');
+        }
+
         const result = await getConverter().createPageFromMarkdown(
             markdown,
-            parentId,
+            databaseId,
             pageTitle,
             options,
             metadata
@@ -144,18 +148,58 @@ export async function createPageFromMarkdownTool({ markdown, parentId, pageTitle
 /**
  * MCP Tool: Export a Notion page to markdown
  */
-export async function exportPageToMarkdownTool({ pageId, options }: {
+export async function exportPageToMarkdownTool({ pageId, options, save_dir }: {
     pageId: string;
     options?: Partial<ConversionOptions>;
+    save_dir?: string;
 }) {
     try {
-        const result = await getConverter().exportPageToMarkdown(pageId, options);
-        const pageTitle = result.page.properties?.title?.title?.[0]?.text?.content || 'Untitled';
+        // Set clean export defaults (no metadata unless requested)
+        const cleanOptions = {
+            includeMetadata: false,
+            ...options
+        };
+        const result = await getConverter().exportPageToMarkdown(pageId, cleanOptions);
+        // Extract title using the proper method
+        const pageTitle = (getConverter() as any).extractPageTitle(result.page);
+
+        let fileInfo = '';
+
+        // Save to file if directory specified
+        if (save_dir) {
+            const fs = await import('fs');
+            const path = await import('path');
+
+            try {
+                // Validate that save_dir is an absolute path
+                if (!path.isAbsolute(save_dir)) {
+                    throw new Error(`save_dir must be an absolute path. Received: ${save_dir}`);
+                }
+
+                // Create the directory if it doesn't exist
+                await fs.promises.mkdir(save_dir, { recursive: true });
+
+                // Create safe filename from page title
+                const safeTitle = pageTitle
+                    .replace(/[^\w\s-]/g, '') // Remove special characters
+                    .replace(/\s+/g, '_')     // Replace spaces with underscores
+                    .toLowerCase();
+
+                const fileName = `${safeTitle}_${pageId.replace(/-/g, '')}.md`;
+                const filePath = path.join(save_dir, fileName);
+
+                // Write file
+                await fs.promises.writeFile(filePath, result.markdown, 'utf8');
+                fileInfo = `\n\n**Saved to:** \`${filePath}\``;
+            } catch (fileError) {
+                fileInfo = `\n\n**File save failed:** ${fileError instanceof Error ? fileError.message : String(fileError)}\n**Note:** save_dir must be an absolute path (e.g., /Users/username/Documents/notion_exports)`;
+            }
+        }
 
         return {
             content: [{
                 type: "text" as const,
-                text: `✅ Page exported successfully!\n\n**Page Title:** ${pageTitle}\n\n**Markdown Content:**\n\`\`\`markdown\n${result.markdown}\n\`\`\`\n\n**Statistics:**\n- Blocks processed: ${result.conversionResult.statistics?.totalBlocks || 0}\n- Warnings: ${result.conversionResult.warnings?.length || 0}`
+                text: `✅ Page exported successfully!\n\n**Page Title:** ${pageTitle}${fileInfo}\n\n**Markdown Content:**\n\`\`\`markdown\n${result.markdown}\n\`\`\`\n\n**Statistics:**\n- Blocks processed: ${result.conversionResult.statistics?.totalBlocks || 0}\n- Warnings: ${result.conversionResult.warnings?.length || 0}`
             }]
         };
     } catch (error) {
@@ -171,9 +215,8 @@ export async function exportPageToMarkdownTool({ pageId, options }: {
 /**
  * MCP Tool: Create a Notion page from a markdown file
  */
-export async function createPageFromFileTool({ filePath, parentId, options, metadata }: {
+export async function createPageFromFileTool({ filePath, options, metadata }: {
     filePath: string;
-    parentId: string;
     options?: Partial<ConversionOptions>;
     metadata?: {
         category?: string;
@@ -183,9 +226,14 @@ export async function createPageFromFileTool({ filePath, parentId, options, meta
     };
 }) {
     try {
+        const databaseId = process.env.NOTION_MCP_DATABASE_ID;
+        if (!databaseId) {
+            throw new Error('NOTION_MCP_DATABASE_ID environment variable is required');
+        }
+
         const result = await getConverter().createPageFromFile(
             filePath,
-            parentId,
+            databaseId,
             options,
             metadata
         );
@@ -404,6 +452,148 @@ export async function parseMarkdownFileTool({ filePath }: {
 }
 
 /**
+ * MCP Tool: Update a Notion page
+ */
+export async function updatePageTool({ pageId, category, tags, description, status }: {
+    pageId: string;
+    category?: string;
+    tags?: string[];
+    description?: string;
+    status?: string;
+}) {
+    try {
+        const notionService = (getConverter() as any).notionService;
+
+        // Build update properties
+        const properties: any = {};
+
+        if (category) {
+            properties.Category = {
+                select: { name: category }
+            };
+        }
+
+        if (tags) {
+            properties.Tags = {
+                multi_select: tags.map(tag => ({ name: tag }))
+            };
+        }
+
+        if (description) {
+            properties.Description = {
+                rich_text: [
+                    {
+                        text: { content: description }
+                    }
+                ]
+            };
+        }
+
+        if (status) {
+            properties.Status = {
+                select: { name: status }
+            };
+        }
+
+        const updatedPage = await notionService.updatePage(pageId, { properties });
+
+        return {
+            content: [{
+                type: "text" as const,
+                text: `✅ Page updated successfully!\n\n**Page ID:** ${pageId}\n**Updated Properties:**\n${Object.keys(properties).map(key => `• ${key}`).join('\n')}`
+            }]
+        };
+    } catch (error) {
+        return {
+            content: [{
+                type: "text" as const,
+                text: `❌ Failed to update page:\n${error instanceof Error ? error.message : String(error)}`
+            }]
+        };
+    }
+}
+
+/**
+ * MCP Tool: Archive (delete) a Notion page
+ */
+export async function archivePageTool({ pageId }: {
+    pageId: string;
+}) {
+    try {
+        const notionService = (getConverter() as any).notionService;
+        const archivedPage = await notionService.archivePage(pageId);
+
+        return {
+            content: [{
+                type: "text" as const,
+                text: `✅ Page archived successfully!\n\n**Page ID:** ${pageId}\n**Status:** Archived\n\n*Note: In Notion, pages are archived rather than deleted. You can restore them from the trash.*`
+            }]
+        };
+    } catch (error) {
+        return {
+            content: [{
+                type: "text" as const,
+                text: `❌ Failed to archive page:\n${error instanceof Error ? error.message : String(error)}`
+            }]
+        };
+    }
+}
+
+/**
+ * MCP Tool: List pages in a database
+ */
+export async function listDatabasePagesTool({ limit = 10 }: {
+    limit?: number;
+}) {
+    try {
+        const databaseId = process.env.NOTION_MCP_DATABASE_ID;
+        if (!databaseId) {
+            throw new Error('NOTION_MCP_DATABASE_ID environment variable is required');
+        }
+
+        const notionService = (getConverter() as any).notionService;
+        const result = await notionService.queryDatabase({
+            database_id: databaseId,
+            page_size: limit
+        });
+
+        if (result.results.length === 0) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `📋 No pages found in database.`
+                }]
+            };
+        }
+
+        const pageList = result.results.map((page: any) => {
+            const title = page.properties?.title?.title?.[0]?.text?.content ||
+                page.properties?.Title?.title?.[0]?.text?.content ||
+                'Untitled';
+            const category = page.properties?.Category?.select?.name || '';
+            const status = page.properties?.Status?.select?.name || '';
+            const lastEdited = new Date(page.last_edited_time).toLocaleDateString();
+
+            return `• **${title}**\n  ID: ${page.id}\n  Category: ${category}\n  Status: ${status}\n  Last edited: ${lastEdited}`;
+        }).join('\n\n');
+
+        return {
+            content: [{
+                type: "text" as const,
+                text: `📋 Database Pages (${result.results.length})\n\n${pageList}`
+            }]
+        };
+    } catch (error) {
+        return {
+            content: [{
+                type: "text" as const,
+                text: `❌ Failed to list database pages:\n${error instanceof Error ? error.message : String(error)}`
+            }]
+        };
+    }
+}
+
+/**
  * Tool definitions for MCP server registration
  */
 export const markdownNotionTools = {
@@ -431,7 +621,6 @@ export const markdownNotionTools = {
         description: 'Create a Notion page from markdown content',
         inputSchema: {
             markdown: z.string().describe('Markdown content'),
-            parentId: z.string().describe('Parent page or database ID'),
             pageTitle: z.string().optional().describe('Page title (optional)'),
             options: conversionOptionsSchema,
             metadata: z.object({
@@ -448,7 +637,8 @@ export const markdownNotionTools = {
         description: 'Export a Notion page to markdown',
         inputSchema: {
             pageId: z.string().describe('Notion page ID'),
-            options: conversionOptionsSchema
+            options: conversionOptionsSchema,
+            save_dir: z.string().optional().describe('Absolute path to directory where the markdown file should be saved (e.g., /Users/username/Documents/notion_exports)')
         },
         handler: exportPageToMarkdownTool
     },
@@ -458,7 +648,6 @@ export const markdownNotionTools = {
         description: 'Create a Notion page from a markdown file',
         inputSchema: {
             filePath: z.string().describe('Path to markdown file'),
-            parentId: z.string().describe('Parent page or database ID'),
             options: conversionOptionsSchema,
             metadata: z.object({
                 category: z.string().optional().describe('Category (e.g., best-practices, architecture, api-reference, testing, examples, guides, reference)'),
@@ -523,5 +712,34 @@ export const markdownNotionTools = {
             filePath: z.string().describe('Path to markdown file')
         },
         handler: parseMarkdownFileTool
+    },
+
+    // Page management tools
+    'update-page': {
+        description: 'Update a Notion page properties (tags, category, description, status)',
+        inputSchema: {
+            pageId: z.string().describe('Notion page ID'),
+            category: z.string().optional().describe('Category (e.g., best-practices, architecture, api-reference, testing, examples, guides, reference)'),
+            tags: z.array(z.string()).optional().describe('Tags array (e.g., ["flutter", "riverpod", "testing"])'),
+            description: z.string().optional().describe('Page description'),
+            status: z.string().optional().describe('Status (e.g., published, draft, archived)')
+        },
+        handler: updatePageTool
+    },
+
+    'archive-page': {
+        description: 'Archive (delete) a Notion page',
+        inputSchema: {
+            pageId: z.string().describe('Notion page ID to archive')
+        },
+        handler: archivePageTool
+    },
+
+    'list-database-pages': {
+        description: 'List pages in a Notion database',
+        inputSchema: {
+            limit: z.number().optional().default(10).describe('Maximum number of pages to return (default: 10)')
+        },
+        handler: listDatabasePagesTool
     }
 }; 

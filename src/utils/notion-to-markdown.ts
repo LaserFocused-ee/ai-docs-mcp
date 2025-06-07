@@ -36,15 +36,51 @@ export function notionBlocksToMarkdown(
             markdownLines.push('');
         }
 
-        for (const block of blocks) {
+        // Process blocks with proper list tracking
+        let numberedListCounter = 0;
+        let lastBlockType = '';
+
+        for (let i = 0; i < blocks.length; i++) {
+            const block = blocks[i];
             try {
-                const markdown = convertNotionBlock(block, config, warnings, errors, unsupportedBlocks);
+                // Track numbered list continuity
+                if (block.type === 'numbered_list_item') {
+                    if (lastBlockType !== 'numbered_list_item') {
+                        numberedListCounter = 1; // Start new list
+                    } else {
+                        numberedListCounter++; // Continue existing list
+                    }
+                } else {
+                    numberedListCounter = 0; // Reset for non-list items
+                }
+
+                const markdown = convertNotionBlock(block, config, warnings, errors, unsupportedBlocks, numberedListCounter);
                 if (markdown) {
                     markdownLines.push(markdown);
+
+                    // Add spacing based on block type and what follows
+                    const nextBlock = blocks[i + 1];
+                    if (nextBlock) {
+                        // Always add blank line after numbered list items
+                        if (block.type === 'numbered_list_item') {
+                            markdownLines.push('');
+                        }
+                        // Add blank line after headings
+                        else if (block.type.startsWith('heading_')) {
+                            markdownLines.push('');
+                        }
+                        // Add blank line before headings (except after another heading)
+                        else if (nextBlock.type.startsWith('heading_') && !block.type.startsWith('heading_')) {
+                            markdownLines.push('');
+                        }
+                    }
+
                     convertedBlocks++;
                 } else {
                     skippedBlocks++;
                 }
+
+                lastBlockType = block.type;
             } catch (error) {
                 errors.push(`Error converting block ${block.type}: ${error}`);
                 errorBlocks++;
@@ -123,43 +159,58 @@ function convertNotionBlock(
     options: ConversionOptions,
     warnings: string[],
     errors: string[],
-    unsupportedBlocks: string[]
+    unsupportedBlocks: string[],
+    numberedListCounter: number = 0,
+    indentLevel: number = 0
 ): string | null {
+    let result = '';
+
     switch (block.type) {
         case 'paragraph':
-            return convertParagraph(block, options);
+            result = convertParagraph(block, options);
+            break;
 
         case 'heading_1':
         case 'heading_2':
         case 'heading_3':
-            return convertHeading(block, options);
+            result = convertHeading(block, options);
+            break;
 
         case 'bulleted_list_item':
-            return convertBulletedListItem(block, options);
+            result = convertBulletedListItem(block, options, indentLevel);
+            break;
 
         case 'numbered_list_item':
-            return convertNumberedListItem(block, options);
+            result = convertNumberedListItem(block, options, numberedListCounter, indentLevel);
+            break;
 
         case 'to_do':
-            return convertToDoItem(block, options);
+            result = convertToDoItem(block, options, indentLevel);
+            break;
 
         case 'code':
-            return convertCodeBlock(block, options);
+            result = convertCodeBlock(block, options);
+            break;
 
         case 'quote':
-            return convertQuote(block, options);
+            result = convertQuote(block, options);
+            break;
 
         case 'divider':
-            return convertDivider(options);
+            result = convertDivider(options);
+            break;
 
         case 'callout':
-            return convertCallout(block, options, warnings);
+            result = convertCallout(block, options, warnings);
+            break;
 
         case 'toggle':
-            return convertToggle(block, options, warnings);
+            result = convertToggle(block, options, warnings);
+            break;
 
         case 'image':
-            return convertImage(block, options, warnings);
+            result = convertImage(block, options, warnings);
+            break;
 
         case 'table':
         case 'table_row':
@@ -168,23 +219,66 @@ function convertNotionBlock(
             return null;
 
         case 'embed':
-            return convertEmbed(block, options);
+            result = convertEmbed(block, options);
+            break;
 
         case 'bookmark':
-            return convertBookmark(block, options);
+            result = convertBookmark(block, options);
+            break;
 
         default:
             unsupportedBlocks.push(block.type);
             warnings.push(`Unsupported block type: ${block.type}`);
 
             if (options.handleUnsupportedBlocks === 'convert') {
-                return `<!-- Unsupported block type: ${block.type} -->`;
+                result = `<!-- Unsupported block type: ${block.type} -->`;
             } else if (options.handleUnsupportedBlocks === 'error') {
                 throw new Error(`Unsupported block type: ${block.type}`);
+            } else {
+                return null; // ignore
+            }
+    }
+
+    // Handle nested children if they exist
+    if (block.children && block.children.length > 0) {
+        const childrenMarkdown: string[] = [];
+        let childNumberedCounter = 0;
+        let lastChildType = '';
+
+        for (const child of block.children) {
+            // Track numbered list continuity for children
+            if (child.type === 'numbered_list_item') {
+                if (lastChildType !== 'numbered_list_item') {
+                    childNumberedCounter = 1; // Start new list
+                } else {
+                    childNumberedCounter++; // Continue existing list
+                }
+            } else {
+                childNumberedCounter = 0; // Reset for non-list items
             }
 
-            return null; // ignore
+            const childMarkdown = convertNotionBlock(
+                child,
+                options,
+                warnings,
+                errors,
+                unsupportedBlocks,
+                childNumberedCounter,
+                indentLevel + 1
+            );
+            if (childMarkdown) {
+                childrenMarkdown.push(childMarkdown);
+            }
+
+            lastChildType = child.type;
+        }
+
+        if (childrenMarkdown.length > 0) {
+            result += '\n' + childrenMarkdown.join('\n');
+        }
     }
+
+    return result || null;
 }
 
 /**
@@ -209,7 +303,17 @@ function convertHeading(
     const text = convertRichTextToMarkdown(block[block.type]?.rich_text || [], options);
 
     const headingPrefix = '#'.repeat(level);
-    return `${headingPrefix} ${text}`;
+
+    // Create anchor from heading text (lowercase, spaces to hyphens, remove special chars)
+    const anchor = text
+        .toLowerCase()
+        .replace(/[^\w\s-]/g, '') // Remove special characters except hyphens
+        .replace(/\s+/g, '-')     // Replace spaces with hyphens
+        .replace(/-+/g, '-')      // Replace multiple hyphens with single
+        .replace(/^-|-$/g, '');   // Remove leading/trailing hyphens
+
+    // Add heading with anchor comment for positioning reference
+    return `${headingPrefix} ${text} {#${anchor}}`;
 }
 
 /**
@@ -217,13 +321,15 @@ function convertHeading(
  */
 function convertBulletedListItem(
     block: any,
-    options: ConversionOptions
+    options: ConversionOptions,
+    indentLevel: number
 ): string {
     const text = convertRichTextToMarkdown(block.bulleted_list_item?.rich_text || [], options);
     const marker = options.listMarker;
 
-    // TODO: Handle nested children
-    return `${marker} ${text}`;
+    // Use 3 spaces for proper markdown indentation
+    const indent = indentLevel === 0 ? '' : '   '.repeat(indentLevel);
+    return `${indent}${marker} ${text}`;
 }
 
 /**
@@ -231,12 +337,15 @@ function convertBulletedListItem(
  */
 function convertNumberedListItem(
     block: any,
-    options: ConversionOptions
+    options: ConversionOptions,
+    numberedListIndex: number,
+    indentLevel: number
 ): string {
     const text = convertRichTextToMarkdown(block.numbered_list_item?.rich_text || [], options);
 
-    // TODO: Handle proper numbering and nested children
-    return `1. ${text}`;
+    // Use 3 spaces for proper markdown indentation  
+    const indent = indentLevel === 0 ? '' : '   '.repeat(indentLevel);
+    return `${indent}${numberedListIndex}. ${text}`;
 }
 
 /**
@@ -244,12 +353,15 @@ function convertNumberedListItem(
  */
 function convertToDoItem(
     block: any,
-    options: ConversionOptions
+    options: ConversionOptions,
+    indentLevel: number
 ): string {
     const text = convertRichTextToMarkdown(block.to_do?.rich_text || [], options);
     const checked = block.to_do?.checked ? 'x' : ' ';
 
-    return `- [${checked}] ${text}`;
+    // Use 3 spaces for proper markdown indentation
+    const indent = indentLevel === 0 ? '' : '   '.repeat(indentLevel);
+    return `${indent}- [${checked}] ${text}`;
 }
 
 /**

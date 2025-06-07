@@ -237,9 +237,8 @@ export class MarkdownNotionConverter {
             // Get the page details
             const page = await this.notionService.getPage(pageId);
 
-            // Get page blocks
-            const blocksResponse = await this.notionService.getBlockChildren(pageId);
-            const blocks = blocksResponse.results;
+            // Get all page blocks recursively to include nested content
+            const blocks = await this.notionService.getAllBlocksRecursively(pageId);
 
             // Convert to markdown
             const conversionResult = await this.notionToMarkdown(blocks, options);

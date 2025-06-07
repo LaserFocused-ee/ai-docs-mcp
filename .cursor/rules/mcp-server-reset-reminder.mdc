@@ -1,0 +1,38 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# MCP Server Reset Reminder
+
+## Critical Workflow Pattern
+
+When working with this MCP (Model Context Protocol) server codebase, **ALWAYS** follow this pattern:
+
+### After Making Code Changes:
+1. ✅ Make your code edits
+2. 🔧 **BUILD** - Run `npm run build` to compile TypeScript
+3. 🔄 Tell the user: "Please reload the MCP server in Cursor"
+4. ⏳ **WAIT** for user confirmation that they've reloaded
+5. ✅ Then proceed with testing
+
+### Why This Matters:
+- The MCP server runs compiled JavaScript from `dist/` directory
+- Changes to TypeScript source files in `src/` don't take effect until compiled
+- The MCP client (Cursor/Claude) needs to reload the server to pick up changes
+- Testing before rebuilding will show old behavior and cause confusion
+
+### Key Files That Require Rebuild:
+- [src/tools/markdown-notion-tools.ts](mdc:src/tools/markdown-notion-tools.ts) - MCP tool definitions
+- [src/services/MarkdownNotionConverter.ts](mdc:src/services/MarkdownNotionConverter.ts) - Core conversion logic
+- [src/utils/notion-to-markdown.ts](mdc:src/utils/notion-to-markdown.ts) - Notion to markdown conversion
+- [src/utils/markdown-to-notion.ts](mdc:src/utils/markdown-to-notion.ts) - Markdown to Notion conversion
+- [src/index.ts](mdc:mcp:src/index.ts) - Server entry point
+
+### User's Rebuild Commands:
+```bash
+npm run build  # Compiles TypeScript and sets up dist/
+# Then user reloads MCP server in their client
+```
+
+**Remember: Never test immediately after changes - always let user rebuild first!**
