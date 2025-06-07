@@ -3,7 +3,7 @@
  */
 
 import { MarkdownNode, ConversionOptions, ConversionResult, ConversionMetadata, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
-import { NotionBlockData } from './notion-block-builder.js';
+import { NotionBlockData } from './notion-blocks.js';
 import {
     buildParagraphBlock,
     buildHeadingBlock,
@@ -18,7 +18,7 @@ import {
     buildCalloutBlock,
     buildFallbackBlock,
     normalizeHeadingLevel
-} from './notion-block-builder.js';
+} from './notion-blocks.js';
 
 /**
  * Convert markdown AST to Notion blocks
@@ -227,6 +227,22 @@ function convertParagraph(
     // Skip empty paragraphs unless explicitly preserving formatting
     if (!content && !options.preserveFormatting) {
         return [];
+    }
+
+    // Handle line breaks - preserve them as separate paragraph blocks
+    if (typeof content === 'string' && content.includes('\n')) {
+        // Split on any line breaks and create separate paragraph blocks
+        const lines = content.split('\n');
+        const blocks: NotionBlockData[] = [];
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine) {
+                blocks.push(buildParagraphBlock(trimmedLine));
+            }
+        }
+
+        return blocks.length > 0 ? blocks : [buildParagraphBlock(content)];
     }
 
     return [buildParagraphBlock(content)];

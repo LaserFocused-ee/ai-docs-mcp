@@ -4,7 +4,7 @@
 
 import { NotionBlock, NotionRichText, NotionColor } from '../types/notion.js';
 import { ConversionOptions, ConversionResult, ConversionMetadata, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
-import { NotionBlockData } from './notion-block-builder.js';
+import { NotionBlockData } from './notion-blocks.js';
 
 /**
  * Convert Notion blocks to Markdown

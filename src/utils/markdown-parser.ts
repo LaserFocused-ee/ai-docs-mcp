@@ -31,7 +31,10 @@ export class MarkdownParser {
         const config = { ...DEFAULT_PARSER_OPTIONS, ...options };
 
         this.processor = remark()
-            .use(remarkParse);
+            .use(remarkParse, {
+                // Enable parsing of hard line breaks 
+                breaks: true
+            });
 
         if (config.extractMetadata) {
             this.processor.use(remarkFrontmatter, ['yaml', 'toml']);
@@ -222,6 +225,13 @@ export class MarkdownParser {
                 return {
                     type: 'text',
                     content: text.value
+                };
+
+            case 'break':
+                // Handle hard line breaks
+                return {
+                    type: 'text',
+                    content: '\n'
                 };
 
             default:

@@ -16,6 +16,11 @@ import {
     CreateCommentRequest,
     DatabaseQueryRequest,
 } from '../types/notion.js';
+import { ConversionOptions, ConversionResult, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
+import { markdownToNotion, notionToMarkdown, extractTitleFromMarkdown, extractPageTitle } from '../utils/converters.js';
+import { NotionBlockData } from '../utils/notion-blocks.js';
+import { readMarkdownFile } from '../utils/file-system.js';
+import path from 'path';
 
 export class NotionService {
     private config: NotionConfig;
@@ -199,5 +204,308 @@ export class NotionService {
             },
             plain_text: content,
         };
+    }
+
+    // ========================================
+    // HIGH-LEVEL METHODS FOR MCP TOOLS
+    // ========================================
+
+    /**
+     * Create a Notion page from markdown content
+     */
+    async createPageFromMarkdown(
+        databaseId: string,
+        options: {
+            markdown?: string;
+            filePath?: string;
+            pageTitle?: string;
+            conversionOptions?: Partial<ConversionOptions>;
+            metadata?: {
+                category?: string;
+                tags?: string[];
+                description?: string;
+                status?: string;
+            };
+        }
+    ): Promise<{ page: NotionPage; conversionResult: ConversionResult }> {
+        try {
+            let markdown: string;
+            let { pageTitle } = options;
+
+            // Determine which input to use
+            if (options.markdown && options.filePath) {
+                throw new Error('Cannot provide both markdown content and filePath. Please provide only one.');
+            }
+
+            if (options.markdown) {
+                markdown = options.markdown;
+            } else if (options.filePath) {
+                // Read file and extract title if not provided
+                markdown = await readMarkdownFile(options.filePath);
+
+                if (!pageTitle) {
+                    const filename = path.basename(options.filePath, '.md');
+                    pageTitle = filename.replace(/[-_]/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+                }
+            } else {
+                throw new Error('Either markdown content or filePath must be provided.');
+            }
+
+            // Convert markdown to blocks using utility function
+            const conversionResult = await markdownToNotion(markdown, options.conversionOptions || {});
+
+            if (conversionResult.errors.length > 0) {
+                console.warn('Conversion warnings:', conversionResult.warnings);
+            }
+
+            const blocks = conversionResult.content as NotionBlockData[];
+
+            // Extract title from markdown if not provided
+            if (!pageTitle) {
+                const extractedTitle = extractTitleFromMarkdown(markdown);
+                pageTitle = extractedTitle || 'Untitled';
+            }
+
+            // Build page properties
+            const properties: any = {
+                title: {
+                    title: [
+                        {
+                            text: {
+                                content: pageTitle || 'Untitled'
+                            }
+                        }
+                    ]
+                }
+            };
+
+            // Ensure database has required properties if metadata is provided
+            if (options.metadata && Object.keys(options.metadata).length > 0) {
+                await this.ensureDatabaseProperties(databaseId);
+            }
+
+            // Add metadata properties if provided
+            if (options.metadata?.category) {
+                properties.Category = {
+                    select: { name: options.metadata.category }
+                };
+            }
+
+            if (options.metadata?.tags && options.metadata.tags.length > 0) {
+                properties.Tags = {
+                    multi_select: options.metadata.tags.map(tag => ({ name: tag }))
+                };
+            }
+
+            if (options.metadata?.description) {
+                properties.Description = {
+                    rich_text: [
+                        {
+                            text: { content: options.metadata.description }
+                        }
+                    ]
+                };
+            }
+
+            if (options.metadata?.status) {
+                properties.Status = {
+                    select: { name: options.metadata.status }
+                };
+            }
+
+            // Create the page with metadata
+            const page = await this.createPage({
+                parent: { type: 'database_id' as const, database_id: databaseId },
+                properties
+            });
+
+            // Add blocks to the page if any
+            if (blocks.length > 0) {
+                await this.appendBlockChildren(page.id, {
+                    children: blocks
+                });
+            }
+
+            return { page, conversionResult };
+        } catch (error) {
+            throw new Error(`Failed to create page from markdown: ${error}`);
+        }
+    }
+
+    /**
+     * Export a Notion page to markdown
+     */
+    async exportPageToMarkdown(
+        pageId: string,
+        options: Partial<ConversionOptions> = {}
+    ): Promise<{ markdown: string; page: NotionPage; conversionResult: ConversionResult }> {
+        try {
+            // Get the page details
+            const page = await this.getPage(pageId);
+
+            // Get all page blocks recursively to include nested content
+            const blocks = await this.getAllBlocksRecursively(pageId);
+
+            // Convert to markdown using utility function
+            const conversionResult = await notionToMarkdown(blocks, options);
+            const markdown = conversionResult.content as string;
+
+            return { markdown, page, conversionResult };
+        } catch (error) {
+            throw new Error(`Failed to export page to markdown: ${error}`);
+        }
+    }
+
+    /**
+     * Update page metadata (properties only)
+     */
+    async updatePageMetadata(
+        pageId: string,
+        metadata: {
+            category?: string;
+            tags?: string[];
+            description?: string;
+            status?: string;
+        }
+    ): Promise<NotionPage> {
+        try {
+            // Build update properties
+            const properties: any = {};
+
+            if (metadata.category) {
+                properties.Category = {
+                    select: { name: metadata.category }
+                };
+            }
+
+            if (metadata.tags) {
+                properties.Tags = {
+                    multi_select: metadata.tags.map(tag => ({ name: tag }))
+                };
+            }
+
+            if (metadata.description) {
+                properties.Description = {
+                    rich_text: [
+                        {
+                            text: { content: metadata.description }
+                        }
+                    ]
+                };
+            }
+
+            if (metadata.status) {
+                properties.Status = {
+                    select: { name: metadata.status }
+                };
+            }
+
+            return await this.updatePage(pageId, { properties });
+        } catch (error) {
+            throw new Error(`Failed to update page metadata: ${error}`);
+        }
+    }
+
+    /**
+     * List database pages with pagination
+     */
+    async listDatabasePages(
+        databaseId: string,
+        limit: number = 10
+    ): Promise<NotionDatabaseQueryResults> {
+        try {
+            return await this.queryDatabase({
+                database_id: databaseId,
+                page_size: limit
+            });
+        } catch (error) {
+            throw new Error(`Failed to list database pages: ${error}`);
+        }
+    }
+
+    /**
+     * Ensure database has required properties for metadata
+     */
+    private async ensureDatabaseProperties(databaseId: string): Promise<void> {
+        try {
+            const database = await this.getDatabase(databaseId);
+            const existingProperties = database.properties;
+
+            const requiredProperties: any = {};
+            let needsUpdate = false;
+
+            // Check for Category property
+            if (!existingProperties.Category) {
+                requiredProperties.Category = {
+                    type: 'select',
+                    select: {
+                        options: [
+                            { name: 'architecture', color: 'blue' },
+                            { name: 'best-practices', color: 'green' },
+                            { name: 'api-reference', color: 'yellow' },
+                            { name: 'testing', color: 'red' },
+                            { name: 'examples', color: 'purple' },
+                            { name: 'guides', color: 'orange' },
+                            { name: 'reference', color: 'gray' }
+                        ]
+                    }
+                };
+                needsUpdate = true;
+            }
+
+            // Check for Tags property
+            if (!existingProperties.Tags) {
+                requiredProperties.Tags = {
+                    type: 'multi_select',
+                    multi_select: {
+                        options: [
+                            { name: 'flutter', color: 'blue' },
+                            { name: 'riverpod', color: 'green' },
+                            { name: 'testing', color: 'red' },
+                            { name: 'architecture', color: 'purple' },
+                            { name: 'ui', color: 'pink' },
+                            { name: 'state-management', color: 'orange' }
+                        ]
+                    }
+                };
+                needsUpdate = true;
+            }
+
+            // Check for Description property
+            if (!existingProperties.Description) {
+                requiredProperties.Description = {
+                    type: 'rich_text',
+                    rich_text: {}
+                };
+                needsUpdate = true;
+            }
+
+            // Check for Status property
+            if (!existingProperties.Status) {
+                requiredProperties.Status = {
+                    type: 'select',
+                    select: {
+                        options: [
+                            { name: 'published', color: 'green' },
+                            { name: 'draft', color: 'yellow' },
+                            { name: 'archived', color: 'red' },
+                            { name: 'review', color: 'orange' }
+                        ]
+                    }
+                };
+                needsUpdate = true;
+            }
+
+            // Update database if needed
+            if (needsUpdate) {
+                await this.updateDatabase(databaseId, {
+                    properties: requiredProperties
+                });
+                console.log('✅ Database properties updated with required metadata fields');
+            }
+        } catch (error) {
+            console.warn('Warning: Could not ensure database properties:', error);
+            // Don't throw error - metadata creation should still work even if property setup fails
+        }
     }
 } 

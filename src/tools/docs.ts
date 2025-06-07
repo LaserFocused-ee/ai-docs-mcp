@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { listAvailableDocuments, readMarkdownFile } from '../utils/docs.js';
+import { listAvailableDocuments, readMarkdownFile } from '../utils/file-system.js';
 
 /**
  * Configure documentation-related tools and resources
