@@ -6,8 +6,8 @@ import { configureNotionTools } from './tools/notion.js';
 
 // Define server info
 export const SERVER_INFO = {
-    name: "Knowledge Hub",
-    version: "1.0.0",
+    name: "AI Knowledge Hub",
+    version: "1.0.2",
     description: "MCP server that provides unified access to organizational knowledge across multiple platforms"
 };
 

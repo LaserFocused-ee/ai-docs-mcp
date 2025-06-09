@@ -77,7 +77,7 @@ npm run build && npm start
 ```json
 {
   "mcpServers": {
-    "knowledge-hub-dev": {
+    "ai-knowledge-hub-dev": {
       "command": "node",
       "args": ["dist/index.js"],
       "env": {
@@ -97,9 +97,9 @@ npm run build && npm start
 ```json
 {
   "mcpServers": {
-    "knowledge-hub": {
+    "ai-knowledge-hub": {
       "command": "npx",
-      "args": ["knowledge-hub"],
+      "args": ["ai-knowledge-hub"],
       "env": {
         "GURU_TOKEN": "username:token",
         "NOTION_TOKEN": "your-notion-token",

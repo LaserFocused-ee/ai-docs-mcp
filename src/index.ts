@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Knowledge Hub MCP Server - Main Entry Point
+ * AI Knowledge Hub MCP Server - Main Entry Point
  * 
  * This file creates and runs an MCP server for accessing documentation
  * and integrating with Guru API. It supports standard JSON-RPC MCP 
