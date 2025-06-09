@@ -19,7 +19,7 @@ import {
 import { ConversionOptions, ConversionResult, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
 import { markdownToNotion, notionToMarkdown, extractTitleFromMarkdown, extractPageTitle } from '../utils/converters.js';
 import { NotionBlockData } from '../utils/notion-blocks.js';
-import { readMarkdownFile } from '../utils/file-system.js';
+import { readMarkdownFile, validateFilePath } from '../utils/file-system.js';
 import path from 'path';
 
 export class NotionService {
@@ -403,6 +403,77 @@ export class NotionService {
             return await this.updatePage(pageId, { properties });
         } catch (error) {
             throw new Error(`Failed to update page metadata: ${error}`);
+        }
+    }
+
+    /**
+ * Update page content (create new page, keep old page)
+ */
+    async updatePageContent(
+        pageId: string,
+        options: {
+            markdown?: string;
+            filePath?: string;
+            conversionOptions?: Partial<ConversionOptions>;
+        }
+    ): Promise<{ conversionResult: ConversionResult; newPageId: string }> {
+        try {
+            // Get markdown content
+            let markdown: string;
+
+            if (!options.markdown && !options.filePath) {
+                throw new Error('Either markdown content or filePath must be provided');
+            }
+
+            if (options.markdown && options.filePath) {
+                throw new Error('Provide either markdown content or filePath, not both');
+            }
+
+            if (options.filePath) {
+                if (!validateFilePath(options.filePath) || !options.filePath.endsWith('.md')) {
+                    throw new Error(`Invalid file path: ${options.filePath}. Must be a .md file with valid path.`);
+                }
+                markdown = await readMarkdownFile(options.filePath);
+            } else {
+                markdown = options.markdown!;
+            }
+
+            // Get current page to preserve metadata
+            const currentPage = await this.getPage(pageId);
+
+            // Extract current metadata
+            const properties = currentPage.properties;
+            const pageTitle = extractPageTitle(currentPage);
+
+            // Get parent database
+            const parent = currentPage.parent;
+            if (parent.type !== 'database_id') {
+                throw new Error('Can only update pages that are in a database');
+            }
+
+            // Convert markdown to blocks
+            const conversionResult = await markdownToNotion(markdown, options.conversionOptions);
+            const blocks = conversionResult.content as NotionBlockData[];
+
+            // Create new page with same properties
+            const newPage = await this.createPage({
+                parent: { type: 'database_id' as const, database_id: parent.database_id },
+                properties: properties
+            });
+
+            // Add blocks to new page
+            if (blocks.length > 0) {
+                await this.appendBlockChildren(newPage.id, {
+                    children: blocks
+                });
+            }
+
+            // Archive the old page to complete the replacement
+            await this.archivePage(pageId);
+
+            return { conversionResult, newPageId: newPage.id };
+        } catch (error) {
+            throw new Error(`Failed to update page content: ${error}`);
         }
     }
 

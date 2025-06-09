@@ -123,36 +123,60 @@ export async function createPageFromMarkdownTool({ markdown, filePath, pageTitle
 }
 
 /**
- * Tool 3: Update Page (properties/metadata only for now)
+ * Tool 3: Update Page (metadata and/or content)
  */
-export async function updatePageTool({ pageId, category, tags, description, status }: {
+export async function updatePageTool({ pageId, markdown, filePath, category, tags, description }: {
     pageId: string;
+    markdown?: string;
+    filePath?: string;
     category?: string;
     tags?: string[];
     description?: string;
-    status?: string;
 }) {
     try {
-
-
-        const metadata: any = {};
-        if (category) metadata.category = category;
-        if (tags) metadata.tags = tags;
-        if (description) metadata.description = description;
-        if (status) metadata.status = status;
-
-        const updatedPage = await notionService.updatePageMetadata(pageId, metadata);
-
         const updates = [];
-        if (category) updates.push(`Category: ${category}`);
-        if (tags && tags.length > 0) updates.push(`Tags: ${tags.join(', ')}`);
-        if (description) updates.push(`Description: ${description}`);
-        if (status) updates.push(`Status: ${status}`);
+        let conversionResult = null;
+
+        // Handle content updates (create new page with updated content, archive old page)
+        if (markdown || filePath) {
+            const result = await notionService.updatePageContent(pageId, {
+                markdown,
+                filePath
+            });
+            conversionResult = result.conversionResult;
+            pageId = result.newPageId; // Update to new page ID
+            updates.push(`Content replaced (${result.conversionResult.statistics?.convertedBlocks || 0} blocks) - NEW PAGE ID: ${result.newPageId}`);
+        }
+
+        // Handle metadata updates
+        const metadata: any = {};
+        if (category) {
+            metadata.category = category;
+            updates.push(`Category: ${category}`);
+        }
+        if (tags) {
+            metadata.tags = tags;
+            updates.push(`Tags: ${tags.join(', ')}`);
+        }
+        if (description) {
+            metadata.description = description;
+            updates.push(`Description: ${description}`);
+        }
+
+        if (Object.keys(metadata).length > 0) {
+            await notionService.updatePageMetadata(pageId, metadata);
+        }
+
+        let responseText = `✅ Page updated successfully!\n\n**Page ID:** ${pageId}\n**Updates Applied:**\n${updates.map(u => `• ${u}`).join('\n')}`;
+
+        if (conversionResult) {
+            responseText += `\n\n**Content Conversion:**\n- Blocks created: ${conversionResult.statistics?.convertedBlocks || 0}\n- Warnings: ${conversionResult.warnings?.length || 0}\n- Errors: ${conversionResult.errors?.length || 0}`;
+        }
 
         return {
             content: [{
                 type: "text" as const,
-                text: `✅ Page updated successfully!\n\n**Page ID:** ${pageId}\n**Updates Applied:**\n${updates.map(u => `• ${u}`).join('\n')}`
+                text: responseText
             }]
         };
     } catch (error) {
@@ -301,20 +325,22 @@ export function configureNotionTools(server: McpServer): void {
     // Tool 3: Update Page
     server.tool(
         'update-page',
-        'Update page properties/metadata',
+        'Update page properties/metadata and/or content',
         {
             pageId: z.string().describe('Notion page ID to update'),
+            markdown: z.string().optional().describe('Markdown content to replace all page content'),
+            filePath: z.string().optional().describe('Path to markdown file to replace all page content'),
             category: z.string().optional().describe('Category (e.g., best-practices, architecture, api-reference, testing, examples, guides, reference)'),
             tags: z.array(z.string()).optional().describe('Tags array (e.g., ["flutter", "riverpod", "testing"])'),
-            description: z.string().optional().describe('Page description'),
-            status: z.string().optional().describe('Status (e.g., published, draft, archived)')
+            description: z.string().optional().describe('Page description')
         },
         async (args: {
             pageId: string;
+            markdown?: string;
+            filePath?: string;
             category?: string;
             tags?: string[];
             description?: string;
-            status?: string;
         }) => {
             return updatePageTool(args);
         }

@@ -30,7 +30,18 @@ export function getDocsDirectory(): string {
         }
     }
 
-    // The docs should be in the same directory as this compiled file
+    // Check if we're running from dist/ directory (development case)
+    // In development, the docs are in the project root, not in dist/
+    if (baseDir.endsWith('dist')) {
+        const projectRoot = path.dirname(baseDir);
+        const projectDocsPath = path.join(projectRoot, 'docs');
+
+        // Only use project root docs if they exist (development case)
+        if (fs.existsSync(projectDocsPath)) {
+            return projectDocsPath;
+        }
+    }
+
     // When packaged, both docs-utils.js and docs/ will be in the dist/ directory
     const docsPath = path.join(baseDir, 'docs');
 
