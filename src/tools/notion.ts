@@ -429,6 +429,14 @@ export async function exportPageToMarkdownTool({ pageId, saveToFile }: {
 
         let responseText = `✅ Page exported successfully!\n\n**Page Title:** ${pageTitle}\n\n**Markdown Content:**\n\`\`\`markdown\n${result.markdown}\n\`\`\`\n\n**Statistics:**\n- Blocks processed: ${result.conversionResult.statistics?.totalBlocks || 0}\n- Warnings: ${result.conversionResult.warnings?.length || 0}`;
 
+        // Show warning details only in development mode
+        if (process.env.NODE_ENV === 'development' && result.conversionResult.warnings && result.conversionResult.warnings.length > 0) {
+            responseText += `\n\n**🔧 WARNING DETAILS (dev mode):**\n`;
+            result.conversionResult.warnings.forEach((warning, index) => {
+                responseText += `${index + 1}. ${warning}\n`;
+            });
+        }
+
         // Save to file if path specified
         if (saveToFile) {
             const fs = await import('fs');
@@ -581,7 +589,7 @@ export function configureNotionTools(server: McpServer): void {
     // Tool 5: Export Page to Markdown
     server.tool(
         'export-page-to-markdown',
-        'Export a Notion page to clean markdown format. Converts all Notion blocks back to standard markdown syntax. Useful for extracting content, creating backups, or converting to other formats.',
+        'Export a Notion page to clean markdown format. Converts all Notion blocks back to standard markdown syntax. Uses optimized parallel block fetching for improved performance.',
         {
             pageId: z.string().describe('Notion page ID to export (from list-database-pages results). Format: "20de87a1-81d0-8197-931a-ece2d3207b4b"'),
             saveToFile: z.string().optional().describe('Absolute file system path to save the markdown file (e.g., "/Users/username/docs/export.md"). If provided, file will be created/overwritten. Directory must exist or will be created.')

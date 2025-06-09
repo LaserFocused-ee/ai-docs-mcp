@@ -39,9 +39,16 @@ export function notionBlocksToMarkdown(
         // Process blocks with proper list tracking
         let numberedListCounter = 0;
         let lastBlockType = '';
+        const processedBlockIds = new Set<string>(); // Track blocks already processed by parents
 
         for (let i = 0; i < blocks.length; i++) {
             const block = blocks[i];
+
+            // Skip blocks that have already been processed by their parent (e.g., table_row blocks processed by table)
+            if (processedBlockIds.has(block.id)) {
+                continue;
+            }
+
             try {
                 // Track numbered list continuity
                 if (block.type === 'numbered_list_item') {
@@ -54,7 +61,7 @@ export function notionBlocksToMarkdown(
                     numberedListCounter = 0; // Reset for non-list items
                 }
 
-                const markdown = convertNotionBlock(block, config, warnings, errors, unsupportedBlocks, numberedListCounter);
+                const markdown = convertNotionBlock(block, config, warnings, errors, unsupportedBlocks, numberedListCounter, 0, processedBlockIds);
                 if (markdown) {
                     markdownLines.push(markdown);
 
@@ -161,7 +168,8 @@ function convertNotionBlock(
     errors: string[],
     unsupportedBlocks: string[],
     numberedListCounter: number = 0,
-    indentLevel: number = 0
+    indentLevel: number = 0,
+    processedBlockIds?: Set<string>
 ): string | null {
     let result = '';
 
@@ -213,9 +221,13 @@ function convertNotionBlock(
             break;
 
         case 'table':
+            result = convertTable(block, options, warnings, processedBlockIds);
+            break;
+
         case 'table_row':
-            // Tables are complex - handle at a higher level
-            warnings.push('Table conversion not fully implemented');
+            // Table rows should be handled by the table converter
+            // If we encounter one here, it means it's not properly nested under a table
+            // Let's silently skip it instead of generating a warning since this is a structural issue
             return null;
 
         case 'embed':
@@ -264,7 +276,8 @@ function convertNotionBlock(
                 errors,
                 unsupportedBlocks,
                 childNumberedCounter,
-                indentLevel + 1
+                indentLevel + 1,
+                processedBlockIds
             );
             if (childMarkdown) {
                 childrenMarkdown.push(childMarkdown);
@@ -403,6 +416,63 @@ function convertQuote(
  */
 function convertDivider(options: ConversionOptions): string {
     return '---';
+}
+
+/**
+ * Convert table block
+ */
+function convertTable(
+    block: any,
+    options: ConversionOptions,
+    warnings: string[],
+    processedBlockIds?: Set<string>
+): string {
+    if (!block.children || block.children.length === 0) {
+        warnings.push('Table block has no rows');
+        return '';
+    }
+
+    const rows: string[] = [];
+    let isFirstRow = true;
+
+    // Process each table row
+    for (const row of block.children) {
+        if (row.type === 'table_row') {
+            // Mark this table_row as processed so it won't be processed again in the main loop
+            if (processedBlockIds && row.id) {
+                processedBlockIds.add(row.id);
+            }
+
+            const cells = row.table_row?.cells || [];
+            const cellTexts: string[] = [];
+
+            // Convert each cell
+            for (const cell of cells) {
+                const cellText = convertRichTextToMarkdown(cell, options);
+                // Escape pipes in cell content and clean up
+                const escapedText = cellText.replace(/\|/g, '\\|').replace(/\n/g, ' ').trim();
+                cellTexts.push(escapedText || ' '); // Ensure no empty cells
+            }
+
+            // Create table row
+            const rowMarkdown = `| ${cellTexts.join(' | ')} |`;
+            rows.push(rowMarkdown);
+
+            // Add header separator after first row
+            if (isFirstRow) {
+                const separator = '|' + ' --- |'.repeat(cellTexts.length);
+                rows.push(separator);
+                isFirstRow = false;
+            }
+        }
+    }
+
+    if (rows.length === 0) {
+        warnings.push('No valid table rows found');
+        return '';
+    }
+
+    return rows.join('\n');
 }
 
 /**

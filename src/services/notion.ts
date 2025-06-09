@@ -115,8 +115,14 @@ export class NotionService {
     }
 
     // Block operations
-    async getBlockChildren(blockId: string): Promise<NotionBlockChildren> {
-        return this.makeRequest<NotionBlockChildren>(`/blocks/${blockId}/children`);
+    async getBlockChildren(blockId: string, startCursor?: string): Promise<NotionBlockChildren> {
+        const params = new URLSearchParams();
+        if (startCursor) {
+            params.append('start_cursor', startCursor);
+        }
+        const queryString = params.toString();
+        const url = `/blocks/${blockId}/children${queryString ? `?${queryString}` : ''}`;
+        return this.makeRequest<NotionBlockChildren>(url);
     }
 
     async appendBlockChildren(
@@ -171,8 +177,8 @@ export class NotionService {
         return this.makeRequest<NotionComment>('/comments', 'POST', request);
     }
 
-    // Utility method for recursive block retrieval
-    async getAllBlocksRecursively(blockId: string): Promise<NotionBlock[]> {
+    // Legacy sequential method - kept for internal use in parallel implementation
+    private async getAllBlocksRecursively(blockId: string): Promise<NotionBlock[]> {
         const allBlocks: NotionBlock[] = [];
         let hasMore = true;
         let startCursor: string | undefined;
@@ -193,6 +199,90 @@ export class NotionService {
 
             hasMore = response.has_more;
             startCursor = response.next_cursor || undefined;
+        }
+
+        return allBlocks;
+    }
+
+    // Optimized breadth-first parallel version for fetching Notion blocks
+    async getAllBlocksRecursivelyParallel(blockId: string, maxConcurrency: number = 5): Promise<NotionBlock[]> {
+        // Create a semaphore to limit concurrent API calls
+        const { Sema } = await import('async-sema');
+        const semaphore = new Sema(maxConcurrency, {
+            capacity: maxConcurrency
+        });
+
+        // Helper to fetch all pages for a single block (handles pagination)
+        const fetchAllPagesForBlock = async (parentBlockId: string): Promise<NotionBlock[]> => {
+            const allBlocks: NotionBlock[] = [];
+            let hasMore = true;
+            let startCursor: string | undefined;
+
+            while (hasMore) {
+                await semaphore.acquire();
+                try {
+                    const response = await this.getBlockChildren(parentBlockId, startCursor);
+                    allBlocks.push(...response.results);
+                    hasMore = response.has_more;
+                    startCursor = response.next_cursor || undefined;
+                } finally {
+                    semaphore.release();
+                }
+            }
+
+            return allBlocks;
+        };
+
+        // Breadth-first traversal - fetch level by level
+        const allBlocks: NotionBlock[] = [];
+        let currentLevelBlocks = [{ id: blockId, has_children: true } as NotionBlock];
+        let level = 0;
+
+        while (currentLevelBlocks.length > 0) {
+            level++;
+
+            // Fetch children for all blocks at current level in parallel
+            const fetchPromises = currentLevelBlocks
+                .filter(block => block.has_children)
+                .map(async (block) => {
+                    const children = await fetchAllPagesForBlock(block.id);
+                    return { parentId: block.id, children };
+                });
+
+            const levelResults = await Promise.all(fetchPromises);
+
+            // Collect all children for the next level
+            const nextLevelBlocks: NotionBlock[] = [];
+
+            for (const { parentId, children } of levelResults) {
+                // Don't add to allBlocks if this is the root page call
+                if (level > 1 || parentId !== blockId) {
+                    allBlocks.push(...children);
+                } else {
+                    // For root level, just add to allBlocks without the page itself
+                    allBlocks.push(...children);
+                }
+
+                // Add children with children to next level
+                nextLevelBlocks.push(...children.filter(child => child.has_children));
+
+                // Attach children to their parent blocks (for structure preservation)
+                if (level > 1) {
+                    const parentBlock = allBlocks.find(b => b.id === parentId);
+                    if (parentBlock) {
+                        (parentBlock as any).children = children;
+                    }
+                } else {
+                    // For level 1, attach children to blocks in allBlocks
+                    for (const block of allBlocks) {
+                        if (block.id === parentId) {
+                            (block as any).children = children;
+                        }
+                    }
+                }
+            }
+
+            currentLevelBlocks = nextLevelBlocks;
         }
 
         return allBlocks;
@@ -360,8 +450,8 @@ export class NotionService {
     }
 
     /**
-     * Export a Notion page to markdown
-     */
+ * Export a Notion page to markdown
+ */
     async exportPageToMarkdown(
         pageId: string,
         options: Partial<ConversionOptions> = {}
@@ -370,8 +460,8 @@ export class NotionService {
             // Get the page details
             const page = await this.getPage(pageId);
 
-            // Get all page blocks recursively to include nested content
-            const blocks = await this.getAllBlocksRecursively(pageId);
+            // Get all page blocks using optimized breadth-first parallel fetching
+            const blocks = await this.getAllBlocksRecursivelyParallel(pageId, 8);
 
             // Convert to markdown using utility function
             const conversionResult = await notionToMarkdown(blocks, options);
