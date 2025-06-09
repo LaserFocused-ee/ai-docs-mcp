@@ -130,6 +130,30 @@ export class NotionService {
         );
     }
 
+    /**
+     * Append blocks to a page/block with automatic chunking for 100-block limit
+     */
+    async appendBlockChildrenChunked(
+        blockId: string,
+        blocks: any[],
+        maxBlocksPerRequest: number = 100
+    ): Promise<NotionBlockChildren[]> {
+        const results: NotionBlockChildren[] = [];
+
+        // Split blocks into chunks of maxBlocksPerRequest
+        for (let i = 0; i < blocks.length; i += maxBlocksPerRequest) {
+            const chunk = blocks.slice(i, i + maxBlocksPerRequest);
+
+            const result = await this.appendBlockChildren(blockId, {
+                children: chunk
+            });
+
+            results.push(result);
+        }
+
+        return results;
+    }
+
     async updateBlock(blockId: string, updateData: any): Promise<NotionBlock> {
         return this.makeRequest<NotionBlock>(`/blocks/${blockId}`, 'PATCH', updateData);
     }
@@ -324,11 +348,9 @@ export class NotionService {
                 properties
             });
 
-            // Add blocks to the page if any
+            // Add blocks to the page if any, using chunked method for large documents
             if (blocks.length > 0) {
-                await this.appendBlockChildren(page.id, {
-                    children: blocks
-                });
+                await this.appendBlockChildrenChunked(page.id, blocks);
             }
 
             return { page, conversionResult };
@@ -466,11 +488,9 @@ export class NotionService {
                 properties: properties
             });
 
-            // Add blocks to new page
+            // Add blocks to new page using chunked method for large documents
             if (blocks.length > 0) {
-                await this.appendBlockChildren(newPage.id, {
-                    children: blocks
-                });
+                await this.appendBlockChildrenChunked(newPage.id, blocks);
             }
 
             // Archive the old page to complete the replacement

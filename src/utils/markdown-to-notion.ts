@@ -3,8 +3,10 @@
  */
 
 import { MarkdownNode, ConversionOptions, ConversionResult, ConversionMetadata, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
-import { NotionBlockData } from './notion-blocks.js';
 import {
+    NotionBlockData,
+    createRichText,
+    createRichTextFromNodes,
     buildParagraphBlock,
     buildHeadingBlock,
     buildBulletedListItemBlock,
@@ -13,8 +15,9 @@ import {
     buildCodeBlock,
     buildQuoteBlock,
     buildDividerBlock,
-    buildTableBlock,
     buildImageBlock,
+    buildTableBlock,
+    buildTableBlockFromNodes,
     buildCalloutBlock,
     buildFallbackBlock,
     normalizeHeadingLevel
@@ -203,10 +206,7 @@ function convertHeading(
 ): NotionBlockData[] {
     const level = node.level || 1;
 
-    if (level > options.maxHeadingLevel) {
-        warnings.push(`Heading level H${level} exceeds max level H${options.maxHeadingLevel}, converting to H${options.maxHeadingLevel}`);
-    }
-
+    // Silently normalize heading levels to Notion's supported range (H1-H3)
     const notionLevel = normalizeHeadingLevel(Math.min(level, options.maxHeadingLevel));
 
     return [buildHeadingBlock(
@@ -401,15 +401,28 @@ function convertTable(
         return [];
     }
 
-    const rows: string[][] = [];
+    const rows: MarkdownNode[][] = [];
 
     for (const rowNode of node.children) {
         if (rowNode.type === 'table_row' && rowNode.children) {
-            const row: string[] = [];
+            const row: MarkdownNode[] = [];
 
             for (const cellNode of rowNode.children) {
                 if (cellNode.type === 'table_cell') {
-                    row.push(cellNode.content || '');
+                    // Use children for rich text content, fallback to content for plain text
+                    if (cellNode.children && cellNode.children.length > 0) {
+                        row.push({
+                            type: 'table_cell',
+                            children: cellNode.children,
+                            content: cellNode.content || ''
+                        });
+                    } else {
+                        row.push({
+                            type: 'table_cell',
+                            content: cellNode.content || '',
+                            children: []
+                        });
+                    }
                 }
             }
 
@@ -424,7 +437,7 @@ function convertTable(
         return [];
     }
 
-    return buildTableBlock(rows, options.tableAlignment);
+    return buildTableBlockFromNodes(rows, options.tableAlignment);
 }
 
 /**

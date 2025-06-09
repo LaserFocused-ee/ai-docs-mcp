@@ -3,18 +3,25 @@ description:
 globs: 
 alwaysApply: true
 ---
-# MCP Server Reset Reminder
+# ⚠️ CRITICAL MCP SERVER RELOAD REQUIREMENT ⚠️
 
-## Critical Workflow Pattern
+## 🚨 **NEVER TEST WITHOUT RELOAD - THIS CAUSES HALLUCINATION LOOPS** 🚨
+
+### ❌ **ASSISTANT WILL HALLUCINATE IF THIS RULE IS BROKEN** ❌
 
 When working with this MCP (Model Context Protocol) server codebase, **ALWAYS** follow this pattern:
 
 ### After Making Code Changes:
 1. ✅ Make your code edits
 2. 🔧 **BUILD** - Run `npm run build` to compile TypeScript
-3. 🔄 Tell the user: "Please reload the MCP server in Cursor"
+3. 🔄 **TELL THE USER: "Please reload the MCP server in Cursor"**
 4. ⏳ **WAIT** for user confirmation that they've reloaded
-5. ✅ Then proceed with testing
+5. ✅ **ONLY THEN** proceed with testing
+
+### 🚨 **CRITICAL WARNING SIGNS - STOP IMMEDIATELY** 🚨
+- If you test immediately after changes without reload = **HALLUCINATION**
+- If user says "try again" after build = **USER HAS RELOADED - PROCEED**
+- If you see old behavior after changes = **NO RELOAD HAPPENED**
 
 ### Why This Matters:
 - The MCP server runs compiled JavaScript from `dist/` directory
@@ -34,5 +41,12 @@ When working with this MCP (Model Context Protocol) server codebase, **ALWAYS** 
 npm run build  # Compiles TypeScript and sets up dist/
 # Then user reloads MCP server in their client
 ```
+
+### 🔥 **EMERGENCY PHRASES TO REMEMBER** 🔥
+- **"Please reload the MCP server in Cursor"**
+- **"I need to wait for you to reload before testing"**
+- **"Let me know when you've reloaded the MCP server"**
+
+## 🚨 **IF USER SAYS "TRY AGAIN" = THEY HAVE RELOADED** 🚨
 
 **Remember: Never test immediately after changes - always let user rebuild first!**

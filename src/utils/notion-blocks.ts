@@ -299,7 +299,7 @@ export function buildToggleBlock(
 
 /**
  * Build a table block
- * Note: Notion tables require separate table and table_row blocks
+ * Note: Notion tables require table_row blocks as children within the table block
  */
 export function buildTableBlock(
     rows: string[][],
@@ -310,20 +310,9 @@ export function buildTableBlock(
 
     const tableWidth = rows[0].length;
 
-    // Create the table block
-    const tableBlock: NotionBlockData = {
-        object: 'block',
-        type: 'table',
-        table: {
-            table_width: tableWidth,
-            has_column_header: hasColumnHeader,
-            has_row_header: hasRowHeader,
-            children: []
-        }
-    };
-
-    // Create table row blocks
+    // Create table row blocks as children
     const tableRows: NotionBlockData[] = rows.map(row => {
+        // Each cell should be an array of rich text objects
         const cells = row.map(cellContent => createRichText(cellContent));
 
         return {
@@ -335,7 +324,70 @@ export function buildTableBlock(
         };
     });
 
-    return [tableBlock, ...tableRows];
+    // Create the table block with rows as children
+    const tableBlock: NotionBlockData = {
+        object: 'block',
+        type: 'table',
+        table: {
+            table_width: tableWidth,
+            has_column_header: hasColumnHeader,
+            has_row_header: hasRowHeader,
+            children: tableRows
+        }
+    };
+
+    // Return only the table block (rows are nested as children)
+    return [tableBlock];
+}
+
+/**
+ * Build a table block from MarkdownNode arrays (supports rich text in cells)
+ * Note: Notion tables require table_row blocks as children within the table block
+ */
+export function buildTableBlockFromNodes(
+    rows: MarkdownNode[][],
+    hasColumnHeader: boolean = true,
+    hasRowHeader: boolean = false
+): NotionBlockData[] {
+    if (rows.length === 0) return [];
+
+    const tableWidth = rows[0].length;
+
+    // Create table row blocks as children
+    const tableRows: NotionBlockData[] = rows.map(row => {
+        // Each cell should be an array of rich text objects
+        const cells = row.map(cellNode => {
+            // If cell has children (rich text), use those; otherwise use content
+            if (cellNode.children && cellNode.children.length > 0) {
+                return createRichTextFromNodes(cellNode.children);
+            } else {
+                return createRichText(cellNode.content || '');
+            }
+        });
+
+        return {
+            object: 'block',
+            type: 'table_row',
+            table_row: {
+                cells
+            }
+        };
+    });
+
+    // Create the table block with rows as children
+    const tableBlock: NotionBlockData = {
+        object: 'block',
+        type: 'table',
+        table: {
+            table_width: tableWidth,
+            has_column_header: hasColumnHeader,
+            has_row_header: hasRowHeader,
+            children: tableRows
+        }
+    };
+
+    // Return only the table block (rows are nested as children)
+    return [tableBlock];
 }
 
 /**

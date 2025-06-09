@@ -719,104 +719,41 @@ Combining multiple formatting styles in one block:
     "rich_text": [
       {
         "type": "text",
-        "text": {
-          "content": "This text has "
-        },
-        "annotations": {
-          "bold": false,
-          "italic": false,
-          "strikethrough": false,
-          "underline": false,
-          "code": false,
-          "color": "default"
-        }
+        "text": { "content": "This text has " },
+        "annotations": { "bold": false, "color": "default" }
+      },
+      {
+        "type": "text", 
+        "text": { "content": "bold" },
+        "annotations": { "bold": true, "color": "default" }
       },
       {
         "type": "text",
-        "text": {
-          "content": "bold"
-        },
-        "annotations": {
-          "bold": true,
-          "italic": false,
-          "strikethrough": false,
-          "underline": false,
-          "code": false,
-          "color": "default"
-        }
+        "text": { "content": " and " },
+        "annotations": { "bold": false, "color": "default" }
       },
       {
         "type": "text",
-        "text": {
-          "content": " and "
-        },
-        "annotations": {
-          "bold": false,
-          "italic": false,
-          "strikethrough": false,
-          "underline": false,
-          "code": false,
-          "color": "default"
-        }
+        "text": { "content": "italic" },
+        "annotations": { "italic": true, "color": "default" }
       },
       {
         "type": "text",
-        "text": {
-          "content": "italic"
-        },
-        "annotations": {
-          "bold": false,
-          "italic": true,
-          "strikethrough": false,
-          "underline": false,
-          "code": false,
-          "color": "default"
-        }
+        "text": { "content": " formatting, plus a " },
+        "annotations": { "bold": false, "color": "default" }
       },
       {
         "type": "text",
-        "text": {
-          "content": " formatting, plus a "
-        },
-        "annotations": {
-          "bold": false,
-          "italic": false,
-          "strikethrough": false,
-          "underline": false,
-          "code": false,
-          "color": "default"
-        }
-      },
-      {
-        "type": "text",
-        "text": {
+        "text": { 
           "content": "link",
-          "link": {
-            "url": "https://notion.so"
-          }
+          "link": { "url": "https://notion.so" }
         },
-        "annotations": {
-          "bold": false,
-          "italic": false,
-          "strikethrough": false,
-          "underline": false,
-          "code": false,
-          "color": "blue"
-        }
+        "annotations": { "color": "blue" }
       },
       {
         "type": "text",
-        "text": {
-          "content": "."
-        },
-        "annotations": {
-          "bold": false,
-          "italic": false,
-          "strikethrough": false,
-          "underline": false,
-          "code": false,
-          "color": "default"
-        }
+        "text": { "content": "." },
+        "annotations": { "color": "default" }
       }
     ]
   }
@@ -834,13 +771,8 @@ Example of deeply nested content:
     "rich_text": [
       {
         "type": "text",
-        "text": {
-          "content": "Project Details"
-        },
-        "annotations": {
-          "bold": true,
-          "color": "blue"
-        }
+        "text": { "content": "Project Details" },
+        "annotations": { "bold": true, "color": "blue" }
       }
     ],
     "children": [
@@ -850,9 +782,7 @@ Example of deeply nested content:
           "rich_text": [
             {
               "type": "text",
-              "text": {
-                "content": "This project includes the following components:"
-              }
+              "text": { "content": "This project includes:" }
             }
           ]
         }
@@ -861,51 +791,15 @@ Example of deeply nested content:
         "type": "bulleted_list_item",
         "bulleted_list_item": {
           "rich_text": [
-            {
-              "type": "text",
-              "text": {
-                "content": "Frontend (React)"
-              }
-            }
+            { "type": "text", "text": { "content": "Frontend (React)" } }
           ],
           "children": [
             {
               "type": "bulleted_list_item",
               "bulleted_list_item": {
                 "rich_text": [
-                  {
-                    "type": "text",
-                    "text": {
-                      "content": "Component library"
-                    }
-                  }
+                  { "type": "text", "text": { "content": "Component library" } }
                 ]
-              }
-            },
-            {
-              "type": "bulleted_list_item",
-              "bulleted_list_item": {
-                "rich_text": [
-                  {
-                    "type": "text",
-                    "text": {
-                      "content": "State management"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      {
-        "type": "bulleted_list_item",
-        "bulleted_list_item": {
-          "rich_text": [
-            {
-              "type": "text",
-              "text": {
-                "content": "Backend (Node.js)"
               }
             }
           ]
@@ -917,9 +811,7 @@ Example of deeply nested content:
           "rich_text": [
             {
               "type": "text",
-              "text": {
-                "content": "// Example code snippet\nconst server = express();\nserver.listen(3000);"
-              }
+              "text": { "content": "const server = express();\nserver.listen(3000);" }
             }
           ],
           "language": "javascript"

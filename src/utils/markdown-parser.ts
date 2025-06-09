@@ -4,6 +4,7 @@
 
 import { remark } from 'remark';
 import remarkParse from 'remark-parse';
+import remarkGfm from 'remark-gfm';
 import remarkStringify from 'remark-stringify';
 import remarkFrontmatter from 'remark-frontmatter';
 import matter from 'gray-matter';
@@ -34,7 +35,8 @@ export class MarkdownParser {
             .use(remarkParse, {
                 // Enable parsing of hard line breaks 
                 breaks: true
-            });
+            })
+            .use(remarkGfm);
 
         if (config.extractMetadata) {
             this.processor.use(remarkFrontmatter, ['yaml', 'toml']);
