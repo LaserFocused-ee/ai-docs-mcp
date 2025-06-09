@@ -266,11 +266,16 @@ export class NotionService {
                 pageTitle = extractedTitle || 'Untitled';
             }
 
+            // Get the correct title property name for this database
+            const titlePropertyName = await this.getTitlePropertyName(databaseId);
+
             // Build page properties
             const properties: any = {
-                title: {
+                [titlePropertyName]: {
+                    type: "title",
                     title: [
                         {
+                            type: "text",
                             text: {
                                 content: pageTitle || 'Untitled'
                             }
@@ -478,19 +483,190 @@ export class NotionService {
     }
 
     /**
-     * List database pages with pagination
+     * List/query database pages with advanced filtering and sorting
      */
     async listDatabasePages(
         databaseId: string,
-        limit: number = 10
+        options: {
+            limit?: number;
+            search?: string;
+            category?: string;
+            tags?: string[];
+            status?: string;
+            sortBy?: 'title' | 'last_edited' | 'created' | 'category' | 'status';
+            sortOrder?: 'ascending' | 'descending';
+            startCursor?: string;
+        } = {}
     ): Promise<NotionDatabaseQueryResults> {
         try {
-            return await this.queryDatabase({
+            const {
+                limit = 10,
+                search,
+                category,
+                tags,
+                status,
+                sortBy = 'last_edited',
+                sortOrder = 'descending',
+                startCursor
+            } = options;
+
+            // Get the title property name for this database
+            const titlePropertyName = await this.getTitlePropertyName(databaseId);
+
+            // Build filter conditions
+            const filters: any[] = [];
+
+            // Text search across title and description
+            if (search) {
+                filters.push({
+                    or: [
+                        {
+                            property: titlePropertyName,
+                            title: {
+                                contains: search
+                            }
+                        },
+                        {
+                            property: 'Description',
+                            rich_text: {
+                                contains: search
+                            }
+                        }
+                    ]
+                });
+            }
+
+            // Category filter
+            if (category) {
+                filters.push({
+                    property: 'Category',
+                    select: {
+                        equals: category
+                    }
+                });
+            }
+
+            // Status filter
+            if (status) {
+                filters.push({
+                    property: 'Status',
+                    select: {
+                        equals: status
+                    }
+                });
+            }
+
+            // Tags filter (any of the specified tags)
+            if (tags && tags.length > 0) {
+                if (tags.length === 1) {
+                    filters.push({
+                        property: 'Tags',
+                        multi_select: {
+                            contains: tags[0]
+                        }
+                    });
+                } else {
+                    // Multiple tags - find pages that contain any of these tags
+                    filters.push({
+                        or: tags.map(tag => ({
+                            property: 'Tags',
+                            multi_select: {
+                                contains: tag
+                            }
+                        }))
+                    });
+                }
+            }
+
+            // Build final filter
+            let filter: any = undefined;
+            if (filters.length === 1) {
+                filter = filters[0];
+            } else if (filters.length > 1) {
+                filter = { and: filters };
+            }
+
+            // Build sort configuration
+            const sorts: any[] = [];
+
+            switch (sortBy) {
+                case 'title':
+                    sorts.push({
+                        property: titlePropertyName,
+                        direction: sortOrder
+                    });
+                    break;
+                case 'category':
+                    sorts.push({
+                        property: 'Category',
+                        direction: sortOrder
+                    });
+                    break;
+                case 'status':
+                    sorts.push({
+                        property: 'Status',
+                        direction: sortOrder
+                    });
+                    break;
+                case 'created':
+                    sorts.push({
+                        timestamp: 'created_time',
+                        direction: sortOrder
+                    });
+                    break;
+                case 'last_edited':
+                default:
+                    sorts.push({
+                        timestamp: 'last_edited_time',
+                        direction: sortOrder
+                    });
+                    break;
+            }
+
+            // Execute query
+            const queryRequest: any = {
                 database_id: databaseId,
-                page_size: limit
-            });
+                page_size: Math.min(limit, 100), // Notion API max is 100
+            };
+
+            if (filter) {
+                queryRequest.filter = filter;
+            }
+
+            if (sorts.length > 0) {
+                queryRequest.sorts = sorts;
+            }
+
+            if (startCursor) {
+                queryRequest.start_cursor = startCursor;
+            }
+
+            return await this.queryDatabase(queryRequest);
         } catch (error) {
-            throw new Error(`Failed to list database pages: ${error}`);
+            throw new Error(`Failed to query database pages: ${error}`);
+        }
+    }
+
+    /**
+     * Find the title property name in a database
+     */
+    private async getTitlePropertyName(databaseId: string): Promise<string> {
+        try {
+            const database = await this.getDatabase(databaseId);
+            const properties = database.properties;
+
+            // Find the property with type "title"
+            for (const [propertyName, property] of Object.entries(properties)) {
+                if ((property as any).type === 'title') {
+                    return propertyName;
+                }
+            }
+
+            // Fallback to common names if no title property found
+            return 'title';
+        } catch (error) {
+            console.warn('Warning: Could not determine title property name:', error);
+            return 'title';
         }
     }
 
@@ -510,15 +686,7 @@ export class NotionService {
                 requiredProperties.Category = {
                     type: 'select',
                     select: {
-                        options: [
-                            { name: 'architecture', color: 'blue' },
-                            { name: 'best-practices', color: 'green' },
-                            { name: 'api-reference', color: 'yellow' },
-                            { name: 'testing', color: 'red' },
-                            { name: 'examples', color: 'purple' },
-                            { name: 'guides', color: 'orange' },
-                            { name: 'reference', color: 'gray' }
-                        ]
+                        options: [] // Start with empty options - Notion will auto-create new options
                     }
                 };
                 needsUpdate = true;
@@ -529,14 +697,7 @@ export class NotionService {
                 requiredProperties.Tags = {
                     type: 'multi_select',
                     multi_select: {
-                        options: [
-                            { name: 'flutter', color: 'blue' },
-                            { name: 'riverpod', color: 'green' },
-                            { name: 'testing', color: 'red' },
-                            { name: 'architecture', color: 'purple' },
-                            { name: 'ui', color: 'pink' },
-                            { name: 'state-management', color: 'orange' }
-                        ]
+                        options: [] // Start with empty options - Notion will auto-create new options
                     }
                 };
                 needsUpdate = true;
@@ -556,12 +717,7 @@ export class NotionService {
                 requiredProperties.Status = {
                     type: 'select',
                     select: {
-                        options: [
-                            { name: 'published', color: 'green' },
-                            { name: 'draft', color: 'yellow' },
-                            { name: 'archived', color: 'red' },
-                            { name: 'review', color: 'orange' }
-                        ]
+                        options: [] // Start with empty options - Notion will auto-create new options
                     }
                 };
                 needsUpdate = true;
@@ -579,4 +735,6 @@ export class NotionService {
             // Don't throw error - metadata creation should still work even if property setup fails
         }
     }
+
+
 } 

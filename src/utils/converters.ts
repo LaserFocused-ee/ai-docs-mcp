@@ -87,8 +87,22 @@ export function extractTitleFromMarkdown(markdown: string): string | null {
  * Extract page title from Notion page properties
  */
 export function extractPageTitle(page: any): string {
-    return page.properties?.title?.title?.[0]?.text?.content ||
-        page.properties?.Title?.title?.[0]?.text?.content ||
+    const properties = page.properties || {};
+
+    // Find the property with type "title"
+    for (const [propertyName, property] of Object.entries(properties)) {
+        if ((property as any).type === 'title') {
+            const titleContent = (property as any).title?.[0]?.text?.content;
+            if (titleContent) {
+                return titleContent;
+            }
+        }
+    }
+
+    // Fallback to common property names
+    return properties.title?.title?.[0]?.text?.content ||
+        properties.Title?.title?.[0]?.text?.content ||
+        properties.Name?.title?.[0]?.text?.content ||
         'Untitled';
 }
 

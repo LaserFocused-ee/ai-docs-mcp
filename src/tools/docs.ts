@@ -70,27 +70,36 @@ export function configureDocsTools(server: McpServer): void {
         "List all available documentation files in the system",
         {},
         async () => {
-            const documents = await listAvailableDocuments();
+            try {
+                const documents = await listAvailableDocuments();
 
-            if (documents.length === 0) {
+                if (documents.length === 0) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: "No documentation files found in the system."
+                        }]
+                    };
+                }
+
+                const docsList = documents.map(doc =>
+                    `- **${doc.category}/${doc.name}** (URI: docs://${doc.category}/${doc.name})`
+                ).join('\n');
+
                 return {
                     content: [{
                         type: "text",
-                        text: "No documentation files found in the system."
+                        text: `Available Documentation Files:\n\n${docsList}\n\nTo read a specific document, use the legacy-read-doc tool with the document name and category.`
+                    }]
+                };
+            } catch (error) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error listing documents: ${error instanceof Error ? error.message : String(error)}`
                     }]
                 };
             }
-
-            const docsList = documents.map(doc =>
-                `- **${doc.category}/${doc.name}** (URI: docs://${doc.category}/${doc.name})`
-            ).join('\n');
-
-            return {
-                content: [{
-                    type: "text",
-                    text: `Available Documentation Files:\n\n${docsList}\n\nTo read a specific document, use the legacy-read-doc tool with the document name and category.`
-                }]
-            };
         }
     );
 
@@ -103,43 +112,51 @@ export function configureDocsTools(server: McpServer): void {
             name: z.string().describe("The name of the document without .md extension")
         },
         async ({ category, name }) => {
-            const documents = await listAvailableDocuments();
-            const document = documents.find(doc =>
-                doc.name === name && doc.category === category
-            );
-
-            if (!document) {
-                // Try fuzzy matching
-                const fuzzyMatch = documents.find(doc =>
-                    doc.name.includes(name) && doc.category.includes(category)
+            try {
+                const documents = await listAvailableDocuments();
+                const document = documents.find(doc =>
+                    doc.name === name && doc.category === category
                 );
 
-                if (fuzzyMatch) {
-                    const content = await readMarkdownFile(fuzzyMatch.path);
+                if (!document) {
+                    // Try fuzzy matching
+                    const fuzzyMatch = documents.find(doc =>
+                        doc.name.includes(name) && doc.category.includes(category)
+                    );
+
+                    if (fuzzyMatch) {
+                        const content = await readMarkdownFile(fuzzyMatch.path);
+                        return {
+                            content: [{
+                                type: "text",
+                                text: `# ${fuzzyMatch.name} (${fuzzyMatch.category})\n\n${content}`
+                            }]
+                        };
+                    }
+
                     return {
                         content: [{
                             type: "text",
-                            text: `# ${fuzzyMatch.name} (${fuzzyMatch.category})\n\n${content}`
+                            text: `Document not found: ${category}/${name}\n\nUse the legacy-list-docs tool to see available documents.`
                         }]
                     };
                 }
 
+                const content = await readMarkdownFile(document.path);
                 return {
                     content: [{
                         type: "text",
-                        text: `Document not found: ${category}/${name}\n\nUse the legacy-list-docs tool to see available documents.`
+                        text: `# ${document.name} (${document.category})\n\n${content}`
+                    }]
+                };
+            } catch (error) {
+                return {
+                    content: [{
+                        type: "text",
+                        text: `Error reading document: ${error instanceof Error ? error.message : String(error)}`
                     }]
                 };
             }
-
-            const content = await readMarkdownFile(document.path);
-
-            return {
-                content: [{
-                    type: "text",
-                    text: `# ${document.name} (${document.category})\n\n${content}`
-                }]
-            };
         }
     );
 } 

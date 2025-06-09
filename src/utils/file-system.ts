@@ -12,40 +12,40 @@ import { DocumentInfo, MarkdownMetadata } from '../types/index.js';
  * Get the docs directory path
  */
 export function getDocsDirectory(): string {
-    // Get the directory of the current module
-    let baseDir: string;
+    // Default to production mode unless explicitly set to development
+    const isDevelopment = process.env.NODE_ENV === 'development';
 
-    if (process.argv[1]) {
-        // When run normally, use the script path
-        baseDir = path.dirname(process.argv[1]);
-    } else if (import.meta.url) {
-        // ESM fallback: use import.meta.url
-        const currentFile = fileURLToPath(import.meta.url);
-        baseDir = path.dirname(currentFile);
+    if (isDevelopment) {
+        // In development, require DEV_HOME environment variable
+        const devHome = process.env.DEV_HOME;
+        if (!devHome) {
+            throw new Error(
+                'DEV_HOME environment variable is required in development mode. ' +
+                'Please set DEV_HOME to the root path of your project'
+            );
+        }
+
+        const docsPath = path.join(devHome, 'docs');
+        if (!fs.existsSync(docsPath)) {
+            throw new Error(`Docs directory not found at ${docsPath}`);
+        }
+
+        return docsPath;
     } else {
-        // Last resort fallback
-        baseDir = process.cwd();
-        if (fs.existsSync(path.join(baseDir, 'dist'))) {
-            baseDir = path.join(baseDir, 'dist');
+        // In production, docs are copied to dist/docs during build
+        // Get the directory where this script is running from
+        const currentFile = fileURLToPath(import.meta.url);
+        const currentDir = path.dirname(currentFile);
+
+        // We're in dist/utils, so docs should be in dist/docs
+        const docsPath = path.join(path.dirname(currentDir), 'docs');
+
+        if (!fs.existsSync(docsPath)) {
+            throw new Error(`Docs directory not found at ${docsPath}. Build may have failed.`);
         }
+
+        return docsPath;
     }
-
-    // Check if we're running from dist/ directory (development case)
-    // In development, the docs are in the project root, not in dist/
-    if (baseDir.endsWith('dist')) {
-        const projectRoot = path.dirname(baseDir);
-        const projectDocsPath = path.join(projectRoot, 'docs');
-
-        // Only use project root docs if they exist (development case)
-        if (fs.existsSync(projectDocsPath)) {
-            return projectDocsPath;
-        }
-    }
-
-    // When packaged, both docs-utils.js and docs/ will be in the dist/ directory
-    const docsPath = path.join(baseDir, 'docs');
-
-    return docsPath;
 }
 
 /**
@@ -85,7 +85,7 @@ export async function listAvailableDocuments(): Promise<DocumentInfo[]> {
 
     try {
         // Check if directory exists
-        if (!await fs.pathExists(docsDirectory)) {
+        if (!fs.existsSync(docsDirectory)) {
             console.error("Documentation directory not found:", docsDirectory);
             console.error("Current working directory:", process.cwd());
             console.error("Script path:", process.argv[1]);
