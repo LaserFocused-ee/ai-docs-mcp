@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version-bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - patch
+        - minor
+        - major
+      release-notes:
+        description: 'Release notes (optional - will auto-generate if empty)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run validation
+        run: npm run validate
+
+      - name: Configure git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Bump version
+        id: version
+        run: |
+          echo "Previous version: $(npm version --no-git-tag-version)"
+          NEW_VERSION=$(npm version ${{ github.event.inputs.version-bump }} --no-git-tag-version)
+          echo "New version: $NEW_VERSION"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "version-number=${NEW_VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Update server version
+        run: |
+          sed -i 's/version: "[^"]*"/version: "${{ steps.version.outputs.version-number }}"/' src/server.ts
+
+      - name: Build package
+        run: npm run build
+
+      - name: Run package validation
+        run: |
+          npm pack --dry-run
+          npm run test:inspector
+
+      - name: Commit version bump
+        run: |
+          git add package.json package-lock.json src/server.ts
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }}"
+          git tag ${{ steps.version.outputs.version }}
+
+      - name: Push changes
+        run: |
+          git push origin main
+          git push origin ${{ steps.version.outputs.version }}
+
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          if [ -z "${{ github.event.inputs.release-notes }}" ]; then
+            # Auto-generate release notes from commits since last tag
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+            if [ -n "$LAST_TAG" ]; then
+              NOTES=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+            else
+              NOTES="- Initial release"
+            fi
+          else
+            NOTES="${{ github.event.inputs.release-notes }}"
+          fi
+          
+          # Escape newlines for GitHub output
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        run: |
+          gh release create ${{ steps.version.outputs.version }} \
+            --title "${{ steps.version.outputs.version }}" \
+            --notes "${{ steps.release-notes.outputs.notes }}" \
+            ${{ github.event.inputs.prerelease == 'true' && '--prerelease' || '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Post-release notification
+        run: |
+          echo "🎉 Successfully released ${{ steps.version.outputs.version }}!"
+          echo "📦 Package: https://www.npmjs.com/package/ai-knowledge-hub"
+          echo "📋 Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }}" 
