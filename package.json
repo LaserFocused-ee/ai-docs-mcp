@@ -1,6 +1,6 @@
 {
   "name": "ai-knowledge-hub",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "MCP server that provides unified access to organizational knowledge across multiple platforms (local docs, Guru, Notion)",
   "main": "dist/index.js",
   "type": "module",
