@@ -3,6 +3,9 @@
  */
 
 import { MarkdownNode, ConversionOptions, ConversionResult, ConversionMetadata, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
+
+// Notion API limits
+const NOTION_CODE_BLOCK_MAX_CHARACTERS = 2000;
 import {
     NotionBlockData,
     createRichText,
@@ -165,7 +168,7 @@ function convertMarkdownNode(
             return convertListItem(node, options, warnings, errors, unsupportedBlocks);
 
         case 'code':
-            return convertCodeBlock(node, options);
+            return convertCodeBlock(node, options, errors);
 
         case 'quote':
             return convertQuote(node, options, warnings, errors, unsupportedBlocks);
@@ -358,10 +361,20 @@ function convertListItem(
  */
 function convertCodeBlock(
     node: MarkdownNode,
-    options: ConversionOptions
+    options: ConversionOptions,
+    errors: string[]
 ): NotionBlockData[] {
+    const content = node.content || '';
+
+    // Validate code block length against Notion's limit
+    if (content.length > NOTION_CODE_BLOCK_MAX_CHARACTERS) {
+        const error = `Code block exceeds Notion's ${NOTION_CODE_BLOCK_MAX_CHARACTERS} character limit: ${content.length} characters found. Language: ${node.language || 'none'}`;
+        errors.push(error);
+        throw new Error(error);
+    }
+
     return [buildCodeBlock(
-        node.content || '',
+        content,
         node.language,
         undefined // caption - could be extracted from title or alt
     )];

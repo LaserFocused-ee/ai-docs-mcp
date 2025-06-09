@@ -293,8 +293,12 @@ class UserScreenViewModel {
 
 ## Complete Example
 
+### Domain Layer Definition
+
+The foundation starts with domain interfaces and models:
+
 ```dart
-// Domain Layer
+// Domain Layer - Interfaces and Models
 abstract class ProductRepositoryInterface {
   Future<List<Product>> getProducts({String? category, bool? inStock});
   Future<Product> createProduct(CreateProductRequest request);
@@ -306,8 +310,14 @@ class Product {
   final double price;
   final bool inStock;
 }
+```
 
-// Data Layer
+### Data Layer Implementation
+
+The data layer implements domain contracts and provides concrete data access:
+
+```dart
+// Data Layer - Repository Implementation and Providers
 class ProductRepository implements ProductRepositoryInterface {
   final ProductApi _api;
   
@@ -325,8 +335,14 @@ class ProductRepository implements ProductRepositoryInterface {
 ProductRepository productRepository(ProductRepositoryRef ref) {
   return ProductRepository(ref.watch(productApiProvider));
 }
+```
 
-// Application Layer
+### Application Layer Services
+
+The application layer coordinates business operations and manages feature state:
+
+```dart
+// Application Layer - Services and Data Management
 @riverpod
 class ProductService {
   final Ref _ref;
@@ -345,8 +361,14 @@ class ProductData extends _$ProductData {
   
   void setProducts(List<Product> products) => state = AsyncData(products);
 }
+```
 
-// Presentation Layer
+### Presentation Layer
+
+The presentation layer handles UI state and user interactions:
+
+```dart
+// Presentation Layer - Controllers and UI Components
 @riverpod
 class ProductController extends _$ProductController {
   @override

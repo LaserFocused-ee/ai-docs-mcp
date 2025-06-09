@@ -1,11 +1,11 @@
 {
-  "name": "ai-docs-mcp-server",
+  "name": "knowledge-hub",
   "version": "1.0.0",
-  "description": "MCP server for serving AI documentation tools",
+  "description": "MCP server that provides unified access to organizational knowledge across multiple platforms (local docs, Guru, Notion)",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "ai-docs-mcp": "dist/index.js"
+    "knowledge-hub": "dist/index.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -15,12 +15,15 @@
     "README.md"
   ],
   "keywords": [
-    "ai",
-    "documentation",
     "mcp",
+    "knowledge-management", 
+    "documentation",
+    "notion",
+    "guru",
+    "markdown",
+    "ai-assistant",
     "claude",
-    "anthropic",
-    "flutter"
+    "anthropic"
   ],
   "author": "Maplefjord",
   "license": "MIT",

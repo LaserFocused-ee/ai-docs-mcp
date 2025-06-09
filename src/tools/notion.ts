@@ -6,10 +6,9 @@
 import { z } from 'zod';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { NotionService } from '../services/notion.js';
-import { ConversionOptions } from '../types/markdown.js';
 import { extractPageTitle } from '../utils/converters.js';
-import { readMarkdownFile, getDocsDirectory } from '../utils/file-system.js';
 import path from 'path';
+import fs from 'fs';
 
 // Global service instance
 let notionService: NotionService;
@@ -213,10 +212,86 @@ export async function createPageFromMarkdownTool({ markdown, filePath, pageTitle
             }]
         };
     } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        // Check if this is a code block length error from Notion API
+        if (errorMessage.includes('should be ≤ `2000`') && errorMessage.includes('text.content.length')) {
+            const sourceDescription = filePath || 'the provided markdown content';
+
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🚫 **Code Block Too Large for Notion**
+
+**Problem:** The document contains a code block that exceeds Notion's 2000 character limit.
+
+**File:** \`${sourceDescription}\`
+**Error:** ${errorMessage}
+
+---
+
+## 📋 **Breaking Up Code Blocks: Guidelines for AI Agent**
+
+**Would you like me to break this code block up for you and retry?**
+
+If yes, please follow these guidelines when splitting the code block:
+
+### **✅ DO:**
+- **Preserve logical boundaries** - Don't break in the middle of functions, classes, or methods
+- **Split at natural breakpoints** - Between functions, after import statements, between logical sections
+- **Maintain context** - Add comments like \`// ... continued from previous block\` or \`// ... continues in next block\`
+- **Keep related code together** - Don't separate function signatures from their implementations
+- **Use descriptive headers** - Add comments explaining what each part contains
+- **Preserve syntax** - Ensure each block is valid code that could compile/run independently when possible
+
+### **❌ DON'T:**
+- Break in the middle of function definitions
+- Split class declarations from their methods
+- Separate variable declarations from their usage in the same logical block
+- Break up closely related configuration objects
+- Split import statements from the code that uses them
+
+### **🔧 Suggested Approach:**
+1. **Identify the oversized code block** in the markdown
+2. **Analyze the code structure** - look for natural breaking points
+3. **Create multiple smaller code blocks** with clear headers
+4. **Add bridging text** between blocks explaining the continuation
+5. **Maintain the same language specification** for all blocks
+6. **Test that the narrative flow still makes sense**
+
+### **📝 Example Split Pattern:**
+\`\`\`typescript
+// Part 1: Interface definitions and imports
+[first logical section]
+\`\`\`
+
+*The implementation continues with the main class definition:*
+
+\`\`\`typescript  
+// Part 2: Main class implementation
+[second logical section]
+\`\`\`
+
+---
+
+**Ready to proceed?** If you'd like me to break up the code block, please:
+gin 1. **🚨 CRITICAL: Make a copy of the original file first** - Never modify the user's source document
+2. Read the original file to understand the structure
+3. Apply the guidelines above to split the problematic code block(s)
+4. Create the new version in the COPY with properly sized code blocks
+5. Try uploading the COPY to test the fix
+6. Only suggest replacing the original if the user explicitly approves
+
+This approach ensures the documentation remains readable and useful while meeting Notion's technical constraints.`
+                }]
+            };
+        }
+
+        // For other errors, return the standard error message
         return {
             content: [{
                 type: "text" as const,
-                text: `❌ Page creation failed:\n${error instanceof Error ? error.message : String(error)}`
+                text: `❌ Page creation failed:\n${errorMessage}`
             }]
         };
     }
@@ -443,7 +518,7 @@ export function configureNotionTools(server: McpServer): void {
         'Create a new documentation page in Notion from markdown content or a markdown file. Automatically converts markdown syntax to Notion blocks and sets proper metadata. Choose either markdown content OR filePath, not both.',
         {
             markdown: z.string().optional().describe('Raw markdown content to convert and create as a page. Supports standard markdown: headers, lists, code blocks, links, etc. Cannot be used with filePath.'),
-            filePath: z.string().optional().describe('Path to markdown file relative to docs/ directory (e.g., "code_guidelines/flutter/architecture/providers.md"). File will be read and converted. Cannot be used with markdown.'),
+            filePath: z.string().optional().describe('Absolute file system path to markdown file (e.g., "/Users/username/code/ai-docs-mcp/mcp_server/docs/code_guidelines/flutter/architecture/providers.md"). File will be read and converted. Cannot be used with markdown.'),
             pageTitle: z.string().optional().describe('Title for the new page. If not provided, will be extracted from the first # heading in markdown or generated from filename.'),
             metadata: z.object({
                 category: z.string().optional().describe('Page category for organization. Must be one of: "best-practices", "architecture", "api-reference", "testing", "examples", "guides", "reference". Helps with discovery and filtering.'),
@@ -474,7 +549,7 @@ export function configureNotionTools(server: McpServer): void {
         {
             pageId: z.string().describe('Notion page ID to update (from list-database-pages results). Format: "20de87a1-81d0-8197-931a-ece2d3207b4b"'),
             markdown: z.string().optional().describe('New markdown content to completely replace page content. Supports all markdown syntax. Cannot be used with filePath. WARNING: This replaces ALL existing content.'),
-            filePath: z.string().optional().describe('Path to markdown file (relative to docs/) to replace page content. Cannot be used with markdown. WARNING: This replaces ALL existing content.'),
+            filePath: z.string().optional().describe('Absolute file system path to markdown file to replace page content. Cannot be used with markdown. WARNING: This replaces ALL existing content.'),
             category: z.string().optional().describe('Update page category. Must be one of: "best-practices", "architecture", "api-reference", "testing", "examples", "guides", "reference". Leave blank to keep existing.'),
             tags: z.array(z.string()).optional().describe('Replace page tags completely with this array. Examples: ["flutter", "riverpod", "updated"]. Leave blank to keep existing tags. This REPLACES all tags, not adds to them.'),
             description: z.string().optional().describe('Update page description. Will be searchable. Leave blank to keep existing description.')

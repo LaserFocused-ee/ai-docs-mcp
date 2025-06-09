@@ -115,7 +115,7 @@ npx @modelcontextprotocol/inspector --cli node dist/index.js --method tools/list
 npx @modelcontextprotocol/inspector --cli node dist/index.js --method tools/call --tool-name hello --tool-arg name="Developer"
 
 # Test with configuration file
-npx @modelcontextprotocol/inspector --cli --config mcp-config.json --server ai-docs
+npx @modelcontextprotocol/inspector --cli --config mcp-config.json --server knowledge-hub
 ```
 
 ## Configuration Export
@@ -131,7 +131,7 @@ The MCP Inspector can generate configuration files for Claude Desktop:
 ```json
 {
   "mcpServers": {
-    "ai-docs": {
+    "knowledge-hub": {
       "command": "node",
       "args": ["dist/index.js"],
       "env": {}
@@ -234,7 +234,7 @@ npm run inspect:cli:validate
 # Check if server starts correctly
 node dist/index.js
 
-# Should output: "AI-Docs MCP Server running on stdio"
+# Should output: "Knowledge Hub MCP Server running on stdio"
 # If not, check build output and dependencies
 ```
 
@@ -278,14 +278,14 @@ Create `mcp-inspector-config.json`:
 ```json
 {
   "mcpServers": {
-    "ai-docs": {
+    "knowledge-hub": {
       "command": "node",
       "args": ["dist/index.js"],
       "env": {
         "DEBUG": "true"
       }
     },
-    "ai-docs-dev": {
+    "knowledge-hub-dev": {
       "command": "npm",
       "args": ["run", "dev"],
       "env": {
@@ -299,7 +299,7 @@ Create `mcp-inspector-config.json`:
 Use with:
 
 ```bash
-npx @modelcontextprotocol/inspector --config mcp-inspector-config.json --server ai-docs
+npx @modelcontextprotocol/inspector --config mcp-inspector-config.json --server knowledge-hub
 ```
 
 ## Best Practices

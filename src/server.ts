@@ -6,9 +6,9 @@ import { configureNotionTools } from './tools/notion.js';
 
 // Define server info
 export const SERVER_INFO = {
-    name: "AI-Docs",
-    version: "0.1.0",
-    description: "MCP server for AI documentation and Guru API integration"
+    name: "Knowledge Hub",
+    version: "1.0.0",
+    description: "MCP server that provides unified access to organizational knowledge across multiple platforms"
 };
 
 /**
@@ -37,7 +37,7 @@ export function configureServer(server: McpServer): void {
             return {
                 content: [{
                     type: "text",
-                    text: `${greeting}\n\nThis is the AI Documentation MCP Server.\n\n` +
+                    text: `${greeting}\n\nThis is the Knowledge Hub MCP Server.\n\n` +
                         `**Available Documentation:**\n` +
                         `- Use resources like: docs://code_guidelines/flutter/best-practices\n` +
                         `- Or legacy tools: legacy-list-docs, legacy-read-doc\n\n` +

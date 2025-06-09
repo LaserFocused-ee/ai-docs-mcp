@@ -1,20 +1,20 @@
 {
   "mcpServers": {
-    "ai-docs": {
+    "knowledge-hub": {
       "command": "npx",
-      "args": ["ai-docs-mcp-server"],
+      "args": ["knowledge-hub"],
       "env": {
         "GURU_TOKEN": "your-username:your-user-token",
         "NOTION_TOKEN": "your-notion-integration-token",
         "NOTION_MCP_DATABASE_ID": "your-database-uuid"
       }
     },
-    "ai-docs-dev": {
+    "knowledge-hub-dev": {
       "command": "node",
       "args": ["dist/index.js"],
       "env": {
         "NODE_ENV": "development",
-        "DEV_HOME": "/Users/yourusername/path/to/mcp_server",
+        "DEV_HOME": "/Users/yourusername/path/to/knowledge-hub",
         "GURU_TOKEN": "your-username:your-user-token",
         "NOTION_TOKEN": "your-notion-integration-token",
         "NOTION_MCP_DATABASE_ID": "your-database-uuid"
