@@ -214,6 +214,29 @@ guru-list-cards(searchTerms="troubleshooting", maxResults=10)
 guru-read-card(cardId="card-uuid")
 ```
 
+## 🚀 Releases & Publishing
+
+This package uses automated GitHub Actions workflows for professional release management.
+
+### 📦 **For Users**
+
+- Install the latest stable version: `npx ai-knowledge-hub`
+- View all releases: [GitHub Releases](https://github.com/LaserFocused-ee/ai-docs-mcp/releases)
+- Check npm versions: [npm Package](https://www.npmjs.com/package/ai-knowledge-hub)
+
+### 🛠️ **For Contributors/Maintainers**
+
+- **Automated Releases**: Use GitHub Actions for safe, validated releases
+- **Version Management**: Supports semantic versioning (patch/minor/major)
+- **Quality Assurance**: Automated testing and validation before publishing
+
+📋 **Full setup guide**: See [RELEASE_SETUP.md](./RELEASE_SETUP.md) for complete instructions on:
+
+- Setting up npm tokens and GitHub secrets
+- Using the automated release workflow
+- Understanding semantic versioning
+- Troubleshooting common issues
+
 ## 🔒 Security & Requirements
 
 - **Node.js**: ≥20.0.0 required
