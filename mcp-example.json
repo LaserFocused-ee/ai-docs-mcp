@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "ai-docs": {
+      "command": "npx",
+      "args": ["ai-docs-mcp-server"],
+      "env": {
+        "GURU_TOKEN": "your-username:your-user-token",
+        "NOTION_TOKEN": "your-notion-integration-token",
+        "NOTION_MCP_DATABASE_ID": "your-database-uuid"
+      }
+    },
+    "ai-docs-dev": {
+      "command": "node",
+      "args": ["dist/index.js"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEV_HOME": "/Users/yourusername/path/to/mcp_server",
+        "GURU_TOKEN": "your-username:your-user-token",
+        "NOTION_TOKEN": "your-notion-integration-token",
+        "NOTION_MCP_DATABASE_ID": "your-database-uuid"
+      }
+    }
+  }
+} 

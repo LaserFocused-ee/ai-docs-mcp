@@ -229,9 +229,9 @@ echo "DEV_HOME=$(pwd)" >> .env
       "args": ["dist/index.js"],
       "env": {
         "NODE_ENV": "development",
-        "DEV_HOME": "/Users/yourusername/path/to/mcp_server",
-        "NOTION_API_KEY": "your-notion-integration-token",
-        "NOTION_MCP_DATABASE_ID": "your-database-id"
+                 "DEV_HOME": "/Users/yourusername/path/to/mcp_server",
+         "NOTION_TOKEN": "your-notion-integration-token",
+         "NOTION_MCP_DATABASE_ID": "your-database-id"
       }
     }
   }
@@ -303,10 +303,10 @@ npm start
       "args": ["dist/index.js"],
       "env": {
         "NODE_ENV": "development",
-        "DEV_HOME": "/Users/yourusername/code/personal/ai-docs/mcp_server",
-        "GURU_TOKEN": "your-username:your-api-token",
-        "NOTION_API_KEY": "your-notion-integration-token",
-        "NOTION_MCP_DATABASE_ID": "your-database-id"
+                 "DEV_HOME": "/Users/yourusername/code/personal/ai-docs/mcp_server",
+         "GURU_TOKEN": "your-username:your-api-token",
+         "NOTION_TOKEN": "your-notion-integration-token",
+         "NOTION_MCP_DATABASE_ID": "your-database-id"
       }
     }
   }
@@ -321,10 +321,10 @@ npm start
     "ai-docs": {
       "command": "npx",
       "args": ["ai-docs-mcp-server"],
-      "env": {
-        "GURU_TOKEN": "your-username:your-api-token",
-        "NOTION_API_KEY": "your-notion-integration-token", 
-        "NOTION_MCP_DATABASE_ID": "your-database-id"
+             "env": {
+         "GURU_TOKEN": "your-username:your-api-token",
+         "NOTION_TOKEN": "your-notion-integration-token", 
+         "NOTION_MCP_DATABASE_ID": "your-database-id"
       }
     }
   }
