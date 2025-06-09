@@ -30,7 +30,11 @@ jobs:
       run: npm run build
       
     - name: Validate MCP Server
-      run: npm run test:inspector
+      run: npm run validate
+      env:
+        NOTION_TOKEN: "dummy-token-for-ci"
+        NOTION_MCP_DATABASE_ID: "dummy-database-id"
+        GURU_TOKEN: "dummy:token"
       
     - name: Validate Package Contents
       run: |

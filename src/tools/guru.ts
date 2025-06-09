@@ -8,6 +8,12 @@ import { GuruService } from '../services/guru.js';
 export function configureGuruTools(server: McpServer): void {
     const guruService = new GuruService();
 
+    // Check if Guru credentials are available
+    const hasGuruCredentials = process.env.GURU_TOKEN;
+    if (!hasGuruCredentials) {
+        console.warn('GURU_TOKEN environment variable not set - Guru tools will not be functional');
+    }
+
 
 
     // Tool to list/search Guru cards
@@ -89,10 +95,20 @@ export function configureGuruTools(server: McpServer): void {
                     }]
                 };
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                if (errorMessage.includes('GURU_TOKEN environment variable')) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: `🔐 Guru API not configured: GURU_TOKEN environment variable is required.\n\nTo use Guru tools, set GURU_TOKEN in format "username:token" in your MCP configuration.`
+                        }]
+                    };
+                }
+
                 return {
                     content: [{
                         type: "text",
-                        text: `Error searching Guru cards: ${error instanceof Error ? error.message : 'Unknown error'}`
+                        text: `Error searching Guru cards: ${errorMessage}`
                     }]
                 };
             }
@@ -131,10 +147,20 @@ export function configureGuruTools(server: McpServer): void {
                     }]
                 };
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                if (errorMessage.includes('GURU_TOKEN environment variable')) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: `🔐 Guru API not configured: GURU_TOKEN environment variable is required.\n\nTo use Guru tools, set GURU_TOKEN in format "username:token" in your MCP configuration.`
+                        }]
+                    };
+                }
+
                 return {
                     content: [{
                         type: "text",
-                        text: `Error reading Guru card: ${error instanceof Error ? error.message : 'Unknown error'}`
+                        text: `Error reading Guru card: ${errorMessage}`
                     }]
                 };
             }
@@ -195,10 +221,20 @@ export function configureGuruTools(server: McpServer): void {
                     }]
                 };
             } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                if (errorMessage.includes('GURU_TOKEN environment variable')) {
+                    return {
+                        content: [{
+                            type: "text",
+                            text: `🔐 Guru API not configured: GURU_TOKEN environment variable is required.\n\nTo use Guru tools, set GURU_TOKEN in format "username:token" in your MCP configuration.`
+                        }]
+                    };
+                }
+
                 return {
                     content: [{
                         type: "text",
-                        text: `Error getting card attachments: ${error instanceof Error ? error.message : 'Unknown error'}`
+                        text: `Error getting card attachments: ${errorMessage}`
                     }]
                 };
             }

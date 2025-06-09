@@ -12,11 +12,11 @@ export class GuruService {
  * Get Guru API credentials from environment variables
  * Expects GURU_TOKEN in format "username:token" or "collection_id:token"
  */
-    private getCredentials(): GuruCredentials {
+    private getCredentials(): GuruCredentials | null {
         const guruToken = process.env.GURU_TOKEN;
 
         if (!guruToken) {
-            throw new Error('GURU_TOKEN environment variable is required');
+            return null;
         }
 
         if (!guruToken.includes(':')) {
@@ -36,7 +36,11 @@ export class GuruService {
      * Make authenticated request to Guru API
      */
     private async makeRequest(url: string, options: any = {}): Promise<any> {
-        const { username, token } = this.getCredentials();
+        const credentials = this.getCredentials();
+        if (!credentials) {
+            throw new Error('GURU_TOKEN environment variable is required');
+        }
+        const { username, token } = credentials;
         const auth = Buffer.from(`${username}:${token}`).toString('base64');
 
         const response = await fetch(url, {
@@ -104,7 +108,11 @@ export class GuruService {
      * Download attachment by file ID
      */
     async downloadAttachment(fileId: string): Promise<Buffer> {
-        const { username, token } = this.getCredentials();
+        const credentials = this.getCredentials();
+        if (!credentials) {
+            throw new Error('GURU_TOKEN environment variable is required');
+        }
+        const { username, token } = credentials;
         const auth = Buffer.from(`${username}:${token}`).toString('base64');
 
         const url = `${this.fileBaseUrl}/files/view/${fileId}`;

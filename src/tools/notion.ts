@@ -20,7 +20,8 @@ let notionService: NotionService;
 export async function initializeNotionService(): Promise<void> {
     const notionToken = process.env.NOTION_TOKEN;
     if (!notionToken) {
-        throw new Error('NOTION_TOKEN environment variable is required');
+        console.warn('NOTION_TOKEN environment variable not set - Notion tools will not be functional');
+        return;
     }
     notionService = new NotionService({ token: notionToken });
 }
@@ -52,9 +53,23 @@ export async function listDatabasePagesTool({
     startCursor?: string;
 }) {
     try {
+        if (!notionService) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
+                }]
+            };
+        }
+
         const databaseId = process.env.NOTION_MCP_DATABASE_ID;
         if (!databaseId) {
-            throw new Error('NOTION_MCP_DATABASE_ID environment variable is required');
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🔐 Notion database not configured: NOTION_MCP_DATABASE_ID environment variable is required.\n\nTo use Notion tools, set NOTION_MCP_DATABASE_ID in your MCP configuration.`
+                }]
+            };
         }
 
         const result = await notionService.listDatabasePages(databaseId, {
@@ -165,9 +180,23 @@ export async function createPageFromMarkdownTool({ markdown, filePath, pageTitle
     };
 }) {
     try {
+        if (!notionService) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
+                }]
+            };
+        }
+
         const databaseId = process.env.NOTION_MCP_DATABASE_ID;
         if (!databaseId) {
-            throw new Error('NOTION_MCP_DATABASE_ID environment variable is required');
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🔐 Notion database not configured: NOTION_MCP_DATABASE_ID environment variable is required.\n\nTo use Notion tools, set NOTION_MCP_DATABASE_ID in your MCP configuration.`
+                }]
+            };
         }
 
         const result = await notionService.createPageFromMarkdown(databaseId, {
@@ -205,6 +234,15 @@ export async function updatePageTool({ pageId, markdown, filePath, category, tag
     description?: string;
 }) {
     try {
+        if (!notionService) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
+                }]
+            };
+        }
+
         const updates = [];
         let conversionResult = null;
 
@@ -267,6 +305,15 @@ export async function archivePageTool({ pageId }: {
     pageId: string;
 }) {
     try {
+        if (!notionService) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
+                }]
+            };
+        }
+
         await notionService.archivePage(pageId);
 
         return {
@@ -293,6 +340,15 @@ export async function exportPageToMarkdownTool({ pageId, saveToFile }: {
     saveToFile?: string; // absolute file path
 }) {
     try {
+        if (!notionService) {
+            return {
+                content: [{
+                    type: "text" as const,
+                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
+                }]
+            };
+        }
+
         const result = await notionService.exportPageToMarkdown(pageId);
         const pageTitle = extractPageTitle(result.page);
 

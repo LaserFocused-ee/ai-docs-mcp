@@ -42,7 +42,7 @@
     "inspect:cli:test": "npm run build && npx @modelcontextprotocol/inspector --cli node dist/index.js --method resources/list && npx @modelcontextprotocol/inspector --cli node dist/index.js --method tools/list",
     "inspect:cli:hello": "npm run build && npx @modelcontextprotocol/inspector --cli node dist/index.js --method tools/call --tool-name hello --tool-arg name=\"Developer\"",
     "test:inspector": "npm run build && npm run inspect:cli:test && npm run inspect:cli:hello",
-    "validate": "npm run build && node dist/index.js --version 2>/dev/null || echo 'Server validation complete'"
+    "validate": "npm run build && npm run inspect:cli:tools && npm run inspect:cli:hello"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
