@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { NotionService } from '../services/NotionService.js';
+import { NotionService } from '../services/notion.js';
 import { ConversionOptions } from '../types/markdown.js';
 import { extractPageTitle } from '../utils/converters.js';
 import { readMarkdownFile, getDocsDirectory } from '../utils/file-system.js';

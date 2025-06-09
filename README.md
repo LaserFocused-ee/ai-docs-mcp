@@ -1,69 +1,75 @@
-# AI Documentation & Guru Knowledge MCP Server
+# AI Documentation & Knowledge Management MCP Server
 
-A **Model Context Protocol (MCP) server** that provides AI assistants like Claude with structured access to both local development documentation and Guru knowledge base content. This server acts as a bridge between AI tools and your organization's knowledge repositories, enabling intelligent retrieval of coding guidelines, architecture patterns, troubleshooting guides, and institutional knowledge.
+A **Model Context Protocol (MCP) server** that provides AI assistants with comprehensive access to documentation, knowledge bases, and content management systems. This server bridges the gap between AI tools and your organization's knowledge repositories, enabling intelligent document creation, retrieval, and management across multiple platforms.
 
-## What is this?
+## 🚀 What is this?
 
-This is an MCP server implementation that:
+This is a production-ready MCP server that provides:
 
-- **Serves structured documentation** through the Model Context Protocol standard
-- **Integrates with Guru knowledge base** for accessing team knowledge and procedures
-- **Provides intelligent document discovery** with category-based organization
-- **Enables AI assistants to access** your team's coding standards, runbooks, and troubleshooting guides
-- **Supports multiple technology stacks** including Flutter, React, NestJS, and Git workflows
-- **Uses modern tool-based architecture** for flexible knowledge access
+- **📚 Local Documentation Access** - Read and serve markdown files from your local docs directory
+- **🧠 Guru Knowledge Base Integration** - Search, read, and manage Guru cards and collections  
+- **📝 Notion Database Management** - Create, query, update, and manage documentation in Notion databases
+- **🔍 Advanced Query & Search** - Powerful filtering, sorting, and search capabilities across all platforms
+- **🛠️ Content Creation & Management** - Convert markdown to Notion pages with proper metadata
+- **🔄 Bi-directional Sync** - Export Notion pages back to markdown format
+- **🏗️ Development & Production Modes** - Flexible deployment options for different environments
 
-## Architecture
+## 🏗️ Architecture
 
-The server is built with a **clean, modular architecture**:
+Built with modern TypeScript and a **clean, modular architecture**:
 
 - **TypeScript/Node.js** runtime (requires Node.js ≥20.0.0)
-- **MCP SDK v1.12.0** (`@modelcontextprotocol/sdk`) for protocol implementation
-- **Modular design** with separated concerns for maintainability
-- **Zod** for parameter validation and type safety
-- **Standard I/O transport** for communication with AI clients
+- **MCP SDK v1.12.0** for protocol implementation
+- **Modular tool-based design** with separated concerns
+- **Zod validation** for type safety and parameter validation
+- **Environment-based configuration** for development and production
 
-### Project Structure
+### 📁 Project Structure
 
 ```
 src/
-├── index.ts              # Main entry point
-├── server.ts             # MCP server configuration
+├── index.ts              # Main MCP server entry point
+├── server.ts             # Server configuration and tool registration
 ├── services/
+│   ├── notion.ts         # Notion API service and database operations
 │   └── guru.ts           # Guru API service
 ├── tools/
-│   ├── docs.ts           # Documentation tools
-│   └── guru.ts           # Guru API tools
+│   ├── docs.ts           # Local documentation tools
+│   ├── guru.ts           # Guru knowledge base tools
+│   └── notion.ts         # Notion database management tools
 ├── types/
-│   └── index.ts          # TypeScript interfaces
+│   ├── notion.ts         # Notion API type definitions
+│   └── index.ts          # General TypeScript interfaces
 └── utils/
-    └── docs.ts           # Documentation utilities
+    ├── converters.ts     # Markdown ↔ Notion conversion utilities
+    ├── markdown-parser.ts # Advanced markdown parsing
+    ├── notion-to-markdown.ts # Notion blocks to markdown conversion
+    ├── markdown-to-notion.ts # Markdown to Notion blocks conversion
+    └── docs.ts           # Documentation file utilities
 ```
 
-## Available Tools
+## 🛠️ Available Tools (11 Total)
 
-The server provides **5 powerful tools** for accessing knowledge:
-
-### Documentation Tools
+### 📚 Local Documentation Tools (2 tools)
 
 #### `legacy-list-docs`
 
-Lists all available documentation files with categories
+Lists all available local documentation files organized by category
 
-- **Returns**: Complete inventory of documentation organized by category
-- **Use case**: Discover available documentation before reading specific files
+- **Returns**: Complete inventory of markdown documentation  
+- **Use case**: Discover available local documentation before reading files
 
 #### `legacy-read-doc`
 
-Reads the content of a specific documentation file
+Reads the content of a specific local documentation file
 
 - **Parameters**:
-  - `category` (required): Document category (e.g., 'code_guidelines/flutter', 'service-docs')
+  - `category` (required): Document category path (e.g., 'code_guidelines/flutter', 'service-docs')
   - `name` (required): Document name without .md extension
-- **Returns**: Full markdown content of the requested document
-- **Example**: `category: "code_guidelines/flutter"`, `name: "best-practices"`
+- **Returns**: Full markdown content with metadata
+- **Supports**: Fuzzy matching for file names
 
-### Guru Knowledge Base Tools
+### 🧠 Guru Knowledge Base Tools (3 tools)
 
 #### `guru-list-cards`
 
@@ -71,56 +77,135 @@ Search and list Guru knowledge cards with advanced filtering
 
 - **Parameters**:
   - `searchTerms` (optional): Search terms for card title/content
-  - `maxResults` (optional): Maximum number of results (max: 50)
+  - `maxResults` (optional): Maximum results (default: 10, max: 50)
   - `showArchived` (optional): Include archived cards
-  - `sortField` (optional): Field to sort by (lastModified, title, dateCreated, etc.)
-  - `sortOrder` (optional): Sort order (asc/desc)
+  - `sortField` (optional): Sort by field (lastModified, title, dateCreated, etc.)
+  - `sortOrder` (optional): Sort direction (asc/desc)
   - `query` (optional): Advanced Guru Query Language query
-- **Returns**: List of matching cards with metadata (title, collection, owner, status, preview)
-- **Example**: Search for "restarting pods" or "API documentation"
+- **Returns**: Cards with metadata, preview content, and collection info
 
 #### `guru-read-card`
 
-Read the full content of a specific Guru card
+Read complete content of a specific Guru card
 
 - **Parameters**:
-  - `cardId` (required): The UUID of the Guru card to read
-- **Returns**: Complete card content including HTML formatting, metadata, and attachment URLs
-- **Use case**: Get detailed procedures, troubleshooting steps, or knowledge articles
+  - `cardId` (required): UUID of the Guru card
+- **Returns**: Full card content with HTML formatting and metadata
 
 #### `guru-get-card-attachments`
 
-List and optionally download attachments from a Guru card
+List and download attachments from Guru cards
 
 - **Parameters**:
-  - `cardId` (required): The UUID of the Guru card
-  - `downloadFirst` (optional): Whether to download the first attachment content
-- **Returns**: List of attachments with URLs and optional content preview
-- **Use case**: Access screenshots, diagrams, or supplementary files
+  - `cardId` (required): UUID of the Guru card
+  - `downloadFirst` (optional): Download first attachment content
+- **Returns**: Attachment URLs and optional content preview
 
-### Example Tool
+### 📝 Notion Database Management Tools (5 tools)
+
+#### `list-database-pages`
+
+**Advanced query and search** documentation pages in Notion database
+
+- **Parameters**:
+  - `limit` (optional): Max pages to return (default: 10, max: 100)
+  - `search` (optional): Search page titles and descriptions
+  - `category` (optional): Filter by exact category match
+  - `tags` (optional): Filter by tags (OR logic) - `["flutter", "testing"]`
+  - `status` (optional): Filter by status (published, draft, archived, review)
+  - `sortBy` (optional): Sort by field (title, last_edited, created, category, status)
+  - `sortOrder` (optional): Sort direction (ascending, descending)
+  - `startCursor` (optional): Pagination cursor for next page
+- **Returns**: Filtered pages with rich metadata, active filter indicators, and pagination info
+- **Use case**: AI agents finding relevant docs based on current context
+
+#### `create-page-from-markdown`
+
+Create new Notion documentation pages from markdown content or files
+
+- **Parameters**:
+  - `markdown` (optional): Raw markdown content to convert
+  - `filePath` (optional): Path to local markdown file (relative to docs/)
+  - `pageTitle` (optional): Page title (auto-extracted from markdown if not provided)
+  - `metadata` (optional): Page metadata object:
+    - `category` (optional): Page category for organization
+    - `tags` (optional): Array of tags for discovery - `["react", "hooks", "performance"]`
+    - `description` (optional): Searchable page description
+    - `status` (optional): Publication status (published, draft, review)
+- **Returns**: Created page details with statistics
+- **Features**: Converts markdown to Notion blocks, sets proper metadata, unlimited category/tag creation
+
+#### `update-page`
+
+Update existing Notion page content and/or metadata
+
+- **Parameters**:
+  - `pageId` (required): Notion page ID to update
+  - `markdown` (optional): New markdown content (replaces all content)
+  - `filePath` (optional): Path to markdown file for content replacement
+  - `category` (optional): Update page category
+  - `tags` (optional): Replace all page tags
+  - `description` (optional): Update page description
+- **Returns**: Update confirmation with statistics
+- **Note**: Content updates create new page and archive old one for history preservation
+
+#### `archive-page`
+
+Archive (soft delete) Notion pages by moving to trash
+
+- **Parameters**:
+  - `pageId` (required): Notion page ID to archive
+- **Returns**: Archive confirmation
+- **Note**: Cannot be undone via API
+
+#### `export-page-to-markdown`
+
+Export Notion pages to clean markdown format
+
+- **Parameters**:
+  - `pageId` (required): Notion page ID to export
+  - `saveToFile` (optional): Absolute file path to save markdown
+- **Returns**: Markdown content with conversion statistics
+- **Features**: Converts all Notion blocks back to standard markdown
+
+### 🔧 Utility Tool (1 tool)
 
 #### `hello`
 
-A simple hello world example demonstrating MCP tool capabilities
+Example tool demonstrating MCP capabilities with usage guide
 
-- **Parameters**:
-  - `name` (optional): Name to greet
-- **Returns**: Greeting message with usage examples
+## ⚙️ Environment Configuration
 
-## Environment Configuration
+### 🔧 Development vs Production Mode
 
-### Guru API Setup
+The server automatically detects the environment:
 
-To use Guru tools, configure your environment variables:
+- **Development Mode**: `NODE_ENV=development` + `DEV_HOME` set
+- **Production Mode**: Default when environment variables not set
+
+#### Development Setup
+
+```bash
+# Set environment variables for development
+export NODE_ENV=development
+export DEV_HOME="/path/to/your/mcp_server"
+
+# Or use .env file in project root:
+echo "NODE_ENV=development" > .env
+echo "DEV_HOME=$(pwd)" >> .env
+```
+
+### 🧠 Guru API Configuration
 
 ```json
 {
   "mcpServers": {
-    "ai-docs": {
+    "ai-docs-dev": {
       "command": "node",
       "args": ["dist/index.js"],
       "env": {
+        "NODE_ENV": "development",
+        "DEV_HOME": "/Users/yourusername/path/to/mcp_server",
         "GURU_TOKEN": "your-username:your-token"
       }
     }
@@ -128,16 +213,41 @@ To use Guru tools, configure your environment variables:
 }
 ```
 
-**Getting your Guru credentials:**
+**Getting Guru credentials:**
 
-1. Log into your Guru account
-2. Go to Settings → API Access
-3. Generate an API token
-4. Format as `username:token` (e.g., `john.doe@company.com:abc123def456`)
+1. Log into Guru → Settings → API Access
+2. Generate API token
+3. Format as `username:token` (e.g., `john.doe@company.com:abc123def456`)
 
-## Documentation Structure
+### 📝 Notion Integration Configuration
 
-git stdsdThe server includes documentation in this structure:
+```json
+{
+  "mcpServers": {
+    "ai-docs-dev": {
+      "command": "node", 
+      "args": ["dist/index.js"],
+      "env": {
+        "NODE_ENV": "development",
+        "DEV_HOME": "/Users/yourusername/path/to/mcp_server",
+        "NOTION_API_KEY": "your-notion-integration-token",
+        "NOTION_MCP_DATABASE_ID": "your-database-id"
+      }
+    }
+  }
+}
+```
+
+**Setting up Notion integration:**
+
+1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
+2. Create new integration → Get API key
+3. Create or share a database with your integration
+4. Copy database ID from URL: `https://notion.so/{database_id}?v=...`
+
+## 📁 Documentation Structure
+
+Local documentation is organized in this structure:
 
 ```
 docs/
@@ -155,100 +265,132 @@ docs/
 │   └── git/
 │       └── graphite_commands_reference.md
 └── service-docs/
-    ├── claude-code-sdk-documentation.md
+    ├── notion-api-guide.md
+    ├── notion-formatting-reference.md
     ├── guru-api-integration-guide.md
-    ├── linear-sdk-documentation.md
-    ├── mcp-inspector-testing-guide.md
-    └── mcp-server-scaffold-guide.md
+    └── mcp-inspector-testing-guide.md
 ```
 
-## Installation & Usage
+## 🚀 Installation & Usage
 
-### Development Setup
+### 💻 Development Setup
 
 ```bash
-# Clone and install
+# Clone and install dependencies
 git clone <repository-url>
 cd mcp_server
 npm install
 
-# Development mode
+# Development mode (with hot reload)
 npm run dev
 
 # Build for production
 npm run build
+
+# Start production server
 npm start
 ```
 
-### Integration with Claude Desktop
+### 🔗 Integration with Claude Desktop
 
-Add to your Claude Desktop MCP configuration (`mcp-config.json`):
+#### Development Configuration
 
 ```json
 {
   "mcpServers": {
-    "ai-docs": {
+    "ai-docs-dev": {
       "command": "node",
       "args": ["dist/index.js"],
       "env": {
-        "GURU_TOKEN": "your-username:your-api-token"
+        "NODE_ENV": "development",
+        "DEV_HOME": "/Users/yourusername/code/personal/ai-docs/mcp_server",
+        "GURU_TOKEN": "your-username:your-api-token",
+        "NOTION_API_KEY": "your-notion-integration-token",
+        "NOTION_MCP_DATABASE_ID": "your-database-id"
       }
     }
   }
 }
 ```
 
-**Note**: Place `mcp-config.json` in your Claude Desktop settings directory and configure Claude to use this file.
+#### Production Configuration
 
-## Testing & Development
-
-### MCP Inspector
-
-This project includes comprehensive testing support using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector).
-
-#### Quick Testing
-
-```bash
-# Build and launch inspector UI
-npm run inspect
-
-# CLI mode testing
-npm run inspect:cli
-
-# Test all tools
-npm run test:inspector
+```json
+{
+  "mcpServers": {
+    "ai-docs": {
+      "command": "npx",
+      "args": ["ai-docs-mcp-server"],
+      "env": {
+        "GURU_TOKEN": "your-username:your-api-token",
+        "NOTION_API_KEY": "your-notion-integration-token", 
+        "NOTION_MCP_DATABASE_ID": "your-database-id"
+      }
+    }
+  }
+}
 ```
 
-#### Available Inspector Commands
+**Note**: Place `mcp-config.json` in your Claude Desktop settings directory.
 
-| Command | Description |
-|---------|-------------|
-| `npm run inspect` | Launch MCP Inspector UI for interactive testing |
-| `npm run inspect:ui` | Same as above (explicit UI mode) |
-| `npm run inspect:cli` | CLI mode for programmatic testing |
-| `npm run inspect:cli:tools` | List all available tools |
-| `npm run inspect:cli:test` | Run basic validation tests |
-| `npm run inspect:cli:hello` | Test the hello tool with sample parameters |
-| `npm run test:inspector` | Comprehensive test suite |
-| `npm run validate` | Basic server validation |
+## 🧪 Testing & Development
 
-#### Testing Documentation Tools
+### 🔍 MCP Inspector Testing
+
+Comprehensive testing support using [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
-# Test listing documentation
+# Interactive UI testing
+npm run inspect
+
+# CLI mode testing  
+npm run inspect:cli
+
+# List all available tools
+npm run inspect:cli:tools
+
+# Run comprehensive test suite
+npm run test:inspector
+
+# Basic server validation
+npm run validate
+```
+
+### 📝 Testing Documentation Tools
+
+```bash
+# Test local documentation listing
 npx @modelcontextprotocol/inspector --cli node dist/index.js \
   --method tools/call \
   --tool-name legacy-list-docs
 
-# Test reading a document
+# Test reading local documentation
 npx @modelcontextprotocol/inspector --cli node dist/index.js \
   --method tools/call \
   --tool-name legacy-read-doc \
   --tool-arg category="service-docs" \
-  --tool-arg name="mcp-inspector-testing-guide"
+  --tool-arg name="notion-api-guide"
 ```
 
-#### Testing Guru Tools
+### 📝 Testing Notion Tools
+
+```bash
+# Test database page querying
+npx @modelcontextprotocol/inspector --cli node dist/index.js \
+  --method tools/call \
+  --tool-name list-database-pages \
+  --tool-arg search="testing" \
+  --tool-arg limit=5
+
+# Test page creation
+npx @modelcontextprotocol/inspector --cli node dist/index.js \
+  --method tools/call \
+  --tool-name create-page-from-markdown \
+  --tool-arg markdown="# Test Page\n\nThis is a test." \
+  --tool-arg pageTitle="Test Page"
+```
+
+### 🧠 Testing Guru Tools
 
 ```bash
 # Test Guru card search
@@ -258,103 +400,150 @@ npx @modelcontextprotocol/inspector --cli node dist/index.js \
   --tool-arg searchTerms="API documentation" \
   --tool-arg maxResults=5
 
-# Test reading a specific card (replace with actual card ID)
+# Test reading specific card
 npx @modelcontextprotocol/inspector --cli node dist/index.js \
   --method tools/call \
   --tool-name guru-read-card \
   --tool-arg cardId="your-card-uuid-here"
 ```
 
-## How It Works
+## 🔧 How It Works
 
-1. **Server Initialization**: Creates an MCP server with stdio transport using SDK v1.12.0
-2. **Service Registration**: Initializes GuruService for API interactions
-3. **Tool Registration**: Registers all documentation and Guru tools with proper validation
+### Architecture Flow
+
+1. **Server Initialization**: Creates MCP server with stdio transport
+2. **Service Registration**: Initializes Notion and Guru services
+3. **Tool Registration**: Registers all 11 tools with proper validation schemas
 4. **Request Handling**: Processes tool calls via JSON-RPC over stdio
-5. **Content Delivery**: Returns formatted content with proper error handling
+5. **Content Processing**: Handles markdown ↔ Notion conversion, API calls, and file operations
+6. **Response Delivery**: Returns formatted content with comprehensive error handling
 
-### Key Features
+### 🌟 Key Features
 
-- **Tool-First Architecture**: All functionality accessed through well-defined tools
-- **Dual Knowledge Sources**: Access both local docs and Guru knowledge base
-- **Intelligent Search**: Powerful search capabilities across both documentation and Guru
-- **Rich Metadata**: Detailed information about documents and knowledge cards
-- **Modular Design**: Clean separation of concerns for maintainability
-- **Environment Configuration**: Secure credential handling through environment variables
-- **Error Handling**: Graceful degradation with helpful error messages
+- **🛠️ Tool-First Architecture**: All functionality through well-defined, documented tools
+- **🔗 Multi-Platform Integration**: Local docs + Guru + Notion in one server
+- **🔍 Advanced Query System**: Powerful filtering, sorting, and search across all platforms
+- **📄 Markdown ↔ Notion Conversion**: Seamless content transformation with proper formatting
+- **🏷️ Unlimited Categorization**: Create any categories, tags, and status values dynamically
+- **📊 Rich Metadata Support**: Comprehensive metadata handling across all platforms
+- **🔒 Secure Configuration**: Environment-based credential handling
+- **🚨 Robust Error Handling**: Graceful degradation with helpful error messages
+- **📄 Development Support**: Hot reload, inspection tools, and comprehensive testing
+- **🔄 Bi-directional Sync**: Import and export content between platforms
 
-## Usage Patterns
+## 💡 Usage Patterns
 
-### Documentation Access
+### 📚 Local Documentation Access
 
 ```bash
 # Discover available documentation
 legacy-list-docs()
 
-# Read specific documentation
+# Read specific documentation with fuzzy matching
 legacy-read-doc(category="code_guidelines/flutter", name="best-practices")
 ```
 
-### Guru Knowledge Access
+### 📝 Notion Database Management
 
 ```bash
-# Search for knowledge cards
-guru-list-cards(searchTerms="kubernetes restart pods", maxResults=10)
+# Find documentation by context
+list-database-pages(search="testing", tags=["react", "automation"], status="published")
+
+# Create documentation from markdown
+create-page-from-markdown(
+  markdown="# API Guide\n\nComplete API documentation...",
+  metadata={
+    category: "api-reference",
+    tags: ["api", "rest", "authentication"],
+    description: "Complete REST API documentation",
+    status: "published"
+  }
+)
+
+# Export for backup or migration
+export-page-to-markdown(pageId="page-uuid", saveToFile="/path/to/backup.md")
+```
+
+### 🧠 Guru Knowledge Access
+
+```bash
+# Search institutional knowledge
+guru-list-cards(searchTerms="kubernetes troubleshooting", maxResults=10)
 
 # Read detailed procedures
 guru-read-card(cardId="05f199c3-0096-458d-a4df-464d55192690")
 
-# Get attachments for visual guides
-guru-get-card-attachments(cardId="card-uuid", downloadFirst=false)
+# Access visual guides and attachments
+guru-get-card-attachments(cardId="card-uuid", downloadFirst=true)
 ```
 
-## Build Process
+## 🏗️ Build Process
 
-The build process:
+The automated build process:
 
-1. Compiles TypeScript to JavaScript (ES modules with .js extensions)
-2. Copies documentation files to `dist/docs/`
-3. Generates type declarations for library usage
-4. Validates all imports and dependencies
+1. **TypeScript Compilation**: Compiles all source files to JavaScript
+2. **Documentation Copying**: Copies `docs/` directory to `dist/docs/`
+3. **Executable Setup**: Makes the main script executable
+4. **Type Generation**: Generates TypeScript declarations
+5. **Validation**: Ensures all imports and dependencies are correct
 
-## Requirements
+Build outputs:
 
-- **Node.js**: ≥20.0.0
-- **MCP SDK**: v1.12.0 (latest)
+- `dist/index.js` - Main executable
+- `dist/docs/` - Local documentation files
+- `dist/**/*.js` - Compiled modules
+- `dist/**/*.d.ts` - TypeScript declarations
+
+## 📋 Requirements
+
+- **Node.js**: ≥20.0.0 (for latest async/await and ESM support)
+- **MCP SDK**: v1.12.0 (automatically installed)
 - **Operating System**: Cross-platform (macOS, Linux, Windows)
-- **Documentation**: Markdown files in the expected directory structure
-- **Guru Access**: Valid Guru API credentials (for Guru functionality)
 
-## Security Notes
+### Optional Requirements
 
-- **Environment Variables**: Guru credentials are handled securely through environment variables
-- **API Rate Limits**: Guru API calls are subject to rate limiting
-- **Token Format**: Use `username:token` format for Guru authentication
-- **Local Files**: Documentation access is restricted to the docs directory
+- **Local Documentation**: Markdown files in `docs/` directory structure
+- **Guru Access**: Valid Guru API credentials for knowledge base functionality
+- **Notion Access**: Notion integration token and database ID for Notion functionality
 
-## What's New
+## 🔒 Security Notes
 
-### v2.0.0 - Major Architecture Overhaul
+- **🔐 Environment Variables**: All credentials handled securely through environment variables
+- **🚫 No Token Storage**: No credentials stored in code or logs
+- **⚡ API Rate Limits**: Automatic handling of API rate limiting
+- **📁 File Access**: Local file access restricted to docs directory only
+- **🔍 Input Validation**: All parameters validated with Zod schemas
 
-- **Complete refactor**: Moved from monolithic to clean modular architecture
-- **Guru API Integration**: Full integration with Guru knowledge base
-- **5 Production Tools**: Comprehensive toolset for both documentation and knowledge access
-- **Environment Configuration**: Secure credential handling
-- **TypeScript Interfaces**: Comprehensive type definitions for all data structures
-- **Service Layer**: Dedicated GuruService for API interactions
-- **Improved Error Handling**: Better error messages and API response handling
-- **Debug Cleanup**: Removed all temporary debug code for production readiness
+## 🆕 What's New
 
-### Removed
+### v0.1.4 - Comprehensive Notion Integration
 
-- Debug tools and console logging
-- Resource-based architecture (replaced with tool-based)
-- Old monolithic server structure
+- **📝 Complete Notion Database Management**: 5 new powerful Notion tools
+- **🔍 Advanced Query System**: Search, filter, sort by category, tags, status, dates
+- **📄 Markdown ↔ Notion Conversion**: Seamless bi-directional content transformation
+- **🏷️ Unlimited Categorization**: Dynamic creation of categories, tags, and status values
+- **📊 Rich Metadata Support**: Categories, tags, descriptions, status tracking
+- **🔄 Pagination Support**: Handle large datasets with cursor-based pagination
+- **⚡ Performance Optimizations**: Efficient database queries and content processing
+- **🛠️ Development Mode**: Enhanced development experience with proper environment handling
 
-## License
+### v0.1.3 - Enhanced Local Documentation
+
+- **📁 Improved File Discovery**: Better path resolution for development and production
+- **🔍 Fuzzy Matching**: Find files even with approximate names
+- **🏗️ Development Support**: Proper development mode with `DEV_HOME` environment variable
+
+### v0.1.2 - Guru Integration
+
+- **🧠 Full Guru API Integration**: Complete knowledge base access
+- **🔍 Advanced Search**: Powerful search and filtering across Guru cards
+- **📎 Attachment Support**: Access and download card attachments
+- **🏷️ Metadata Rich**: Complete card metadata and collection information
+
+## 📄 License
 
 MIT License - See package.json for details.
 
 ---
 
-This MCP server transforms static documentation and institutional knowledge into an intelligent, queryable resource for AI assistants, enabling context-aware development guidance, troubleshooting support, and access to your organization's collective knowledge through both local documentation and Guru knowledge base integration.
+This MCP server transforms static documentation, institutional knowledge, and content management into an intelligent, queryable ecosystem for AI assistants. It enables context-aware development guidance, comprehensive documentation management, and seamless access to your organization's collective knowledge across multiple platforms through a unified, powerful API.
