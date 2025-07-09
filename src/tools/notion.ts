@@ -794,6 +794,28 @@ export function configureNotionTools(server: McpServer): void {
         },
     );
 
+    // Tool 3.5: Update Page Metadata Only
+    server.tool(
+        'update-page-metadata',
+        'Update only the metadata (category, tags, status, description) of a Notion page without modifying its content. Faster and safer than full page updates.',
+        {
+            pageId: z.string().describe('The ID of the Notion page to update'),
+            category: z.string().optional().describe('New category for the page'),
+            tags: z.array(z.string()).optional().describe('New tags for the page (replaces existing tags)'),
+            status: z.string().optional().describe('New status for the page'),
+            description: z.string().optional().describe('New description for the page'),
+        },
+        async (args: {
+            pageId: string;
+            category?: string;
+            tags?: string[];
+            status?: string;
+            description?: string;
+        }) => {
+            return updatePageMetadataTool(args);
+        },
+    );
+
     // Tool 4: Archive Page
     server.tool(
         'archive-page',
