@@ -8,17 +8,6 @@
  * protocol over stdio.
  */
 
-// Load environment variables from .env.inspector if it exists (for testing)
-import dotenv from 'dotenv';
-import { existsSync } from 'fs';
-import { join } from 'path';
-
-const envPath = join(process.cwd(), '.env.inspector');
-if (existsSync(envPath)) {
-    dotenv.config({ path: envPath });
-    console.error('Loaded environment variables from .env.inspector');
-}
-
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { SERVER_INFO, configureServer } from './server.js';

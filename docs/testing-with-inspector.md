@@ -2,7 +2,7 @@
 
 ## Environment Setup
 
-This project supports loading environment variables from a `.env.inspector` file when running with MCP Inspector. This allows you to test the MCP server without exposing sensitive tokens.
+The MCP Inspector npm scripts are configured to automatically load environment variables from a `.env.inspector` file. This allows you to test the MCP server without exposing sensitive tokens or modifying production code.
 
 ### Setup Steps
 
@@ -26,7 +26,7 @@ This project supports loading environment variables from a `.env.inspector` file
    npm run inspect:cli
    ```
 
-The server will automatically load variables from `.env.inspector` when it exists.
+The npm scripts use Node's `-r dotenv/config` flag with `dotenv_config_path=.env.inspector` to load the environment variables only during testing.
 
 ## Testing Notion Tools
 
