@@ -531,7 +531,7 @@ export async function updatePageMetadataTool(args: {
         tags?: string[];
         status?: string;
         description?: string;
-    }
+    },
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
         if (notionService === undefined) {
@@ -563,10 +563,18 @@ export async function updatePageMetadataTool(args: {
 
         // Build success message showing what was updated
         const updates: string[] = [];
-        if (args.category !== undefined) updates.push(`category: "${args.category}"`);
-        if (args.tags !== undefined) updates.push(`tags: [${args.tags.join(', ')}]`);
-        if (args.status !== undefined) updates.push(`status: "${args.status}"`);
-        if (args.description !== undefined) updates.push(`description: "${args.description}"`);
+        if (args.category !== undefined) {
+            updates.push(`category: "${args.category}"`);
+        }
+        if (args.tags !== undefined) {
+            updates.push(`tags: [${args.tags.join(', ')}]`);
+        }
+        if (args.status !== undefined) {
+            updates.push(`status: "${args.status}"`);
+        }
+        if (args.description !== undefined) {
+            updates.push(`description: "${args.description}"`);
+        }
 
         return {
             content: [{
