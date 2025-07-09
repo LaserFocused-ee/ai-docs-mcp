@@ -133,10 +133,22 @@ export interface NotionProperty {
     [key: string]: unknown; // Type-specific values
 }
 
+export interface NotionSelectOption {
+    id?: string;
+    name: string;
+    color?: NotionColor;
+}
+
 export interface NotionDatabaseProperty {
     id: string;
     name: string;
     type: string;
+    select?: {
+        options: NotionSelectOption[];
+    };
+    multi_select?: {
+        options: NotionSelectOption[];
+    };
     [key: string]: unknown; // Type-specific configuration
 }
 

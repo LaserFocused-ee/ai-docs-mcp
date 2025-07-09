@@ -396,14 +396,10 @@ export async function listCategoriesTool(): Promise<{ content: Array<{ type: 'te
             };
         }
 
-        const categoryProp = database.properties[categoryPropName] as {
-            type: string;
-            select?: { options?: Array<{ name: string; color?: string }> };
-            multi_select?: { options?: Array<{ name: string; color?: string }> };
-        };
+        const categoryProp = database.properties[categoryPropName];
         const propType = categoryProp.type;
 
-        let categories: Array<{ name: string; color?: string }> = [];
+        let categories: Array<{ name: string; color: string }> = [];
 
         if (propType === 'select' && categoryProp.select?.options !== undefined) {
             categories = categoryProp.select.options.map((opt) => ({
