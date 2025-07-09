@@ -523,6 +523,69 @@ export async function updatePageTool({ pageId, markdown, filePath, category, tag
 }
 
 /**
+ * Tool 3.5: Update Page Metadata Only
+ */
+export async function updatePageMetadataTool(args: {
+        pageId: string;
+        category?: string;
+        tags?: string[];
+        status?: string;
+        description?: string;
+    }
+): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+    try {
+        if (notionService === undefined) {
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: '❌ Notion service not configured. Please set NOTION_TOKEN and NOTION_MCP_DATABASE_ID environment variables.',
+                }],
+            };
+        }
+
+        // Validate at least one metadata field is provided
+        if (args.category === undefined && args.tags === undefined && args.status === undefined && args.description === undefined) {
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: '❌ At least one metadata field must be provided (category, tags, status, or description)',
+                }],
+            };
+        }
+
+        // Call the service method
+        await notionService.updatePageMetadata(args.pageId, {
+            category: args.category,
+            tags: args.tags,
+            status: args.status,
+            description: args.description,
+        });
+
+        // Build success message showing what was updated
+        const updates: string[] = [];
+        if (args.category !== undefined) updates.push(`category: "${args.category}"`);
+        if (args.tags !== undefined) updates.push(`tags: [${args.tags.join(', ')}]`);
+        if (args.status !== undefined) updates.push(`status: "${args.status}"`);
+        if (args.description !== undefined) updates.push(`description: "${args.description}"`);
+
+        return {
+            content: [{
+                type: 'text' as const,
+                text: `✅ Successfully updated page metadata!\n\nUpdated fields:\n${updates.map(u => `• ${u}`).join('\n')}\n\nPage ID: ${args.pageId}`,
+            }],
+        };
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+            content: [{
+                type: 'text' as const,
+                text: `❌ Failed to update page metadata: ${errorMessage}`,
+            }],
+        };
+    }
+}
+
+/**
  * Tool 4: Archive Page
  */
 export async function archivePageTool({ pageId }: {
