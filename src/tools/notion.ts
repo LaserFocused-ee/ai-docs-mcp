@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NotionService } from '../services/notion.js';
 import { extractPageTitle } from '../utils/converters.js';
+import type { NotionSelectOption } from '../types/notion.js';
 
 interface NotionPage {
     id: string;
@@ -399,7 +400,7 @@ export async function listCategoriesTool(): Promise<{ content: Array<{ type: 'te
         const categoryProp = database.properties[categoryPropName];
         const propType = categoryProp.type;
 
-        let categories: Array<{ name: string; color: string }> = [];
+        let categories: NotionSelectOption[] = [];
 
         if (propType === 'select' && categoryProp.select?.options !== undefined) {
             categories = categoryProp.select.options.map((opt) => ({
