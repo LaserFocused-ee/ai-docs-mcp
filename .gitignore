@@ -19,6 +19,7 @@ PUBLISHING.md
 .env.development.local
 .env.test.local
 .env.production.local
+.env.inspector
 
 # Editor directories and files
 .idea/
