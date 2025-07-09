@@ -696,6 +696,16 @@ export function configureNotionTools(server: McpServer): void {
         },
     );
 
+    // Tool 2.5: List Categories
+    server.tool(
+        'list-categories',
+        'List all available categories in the Notion database with their type (select/multi_select). Shows the category options that can be used when creating or updating pages.',
+        {},
+        async () => {
+            return listCategoriesTool();
+        },
+    );
+
     // Tool 3: Update Page
     server.tool(
         'update-page',
