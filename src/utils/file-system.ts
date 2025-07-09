@@ -4,7 +4,7 @@
  */
 
 import * as fs from 'fs-extra';
-import { dirname, resolve, extname } from 'path';
+import { dirname, extname, resolve } from 'path';
 import { MarkdownMetadata } from '../types/index.js';
 
 /**

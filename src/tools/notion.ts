@@ -355,6 +355,101 @@ This approach ensures the documentation remains readable and useful while meetin
 }
 
 /**
+ * Tool 2.5: List Available Categories
+ */
+export async function listCategoriesTool(): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+    try {
+        if (notionService === undefined) {
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: '🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
+            };
+        }
+
+        const databaseId = process.env.NOTION_MCP_DATABASE_ID;
+        if (databaseId === undefined || databaseId === '') {
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: '🔐 Notion database not configured: NOTION_MCP_DATABASE_ID environment variable is required.\n\nTo use Notion tools, set NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
+            };
+        }
+
+        // Get database structure to find Category property
+        const database = await notionService.getDatabase(databaseId);
+
+        // Find the Category property (case-insensitive)
+        const categoryPropName = Object.keys(database.properties).find(
+            prop => prop.toLowerCase() === 'category' || prop.toLowerCase() === 'categories',
+        );
+
+        if (categoryPropName === undefined) {
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: '❌ No \'Category\' property found in the database. Available properties: ' +
+                          Object.keys(database.properties).join(', '),
+                }],
+            };
+        }
+
+        const categoryProp = database.properties[categoryPropName] as {
+            type: string;
+            select?: { options?: Array<{ name: string; color?: string }> };
+            multi_select?: { options?: Array<{ name: string; color?: string }> };
+        };
+        const propType = categoryProp.type;
+
+        let categories: Array<{ name: string; color?: string }> = [];
+
+        if (propType === 'select' && categoryProp.select?.options !== undefined) {
+            categories = categoryProp.select.options.map((opt) => ({
+                name: opt.name,
+                color: opt.color ?? 'default',
+            }));
+        } else if (propType === 'multi_select' && categoryProp.multi_select?.options !== undefined) {
+            categories = categoryProp.multi_select.options.map((opt) => ({
+                name: opt.name,
+                color: opt.color ?? 'default',
+            }));
+        }
+
+        if (categories.length === 0) {
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: `📋 Category property found (type: ${propType}) but no categories defined yet.\n\n` +
+                          '💡 Add categories in Notion by creating pages with new category values.',
+                }],
+            };
+        }
+
+        const formattedOutput = `📋 Available Categories (${categories.length})\n` +
+            `Property Type: ${propType}\n\n` +
+            categories.map(cat => `• ${cat.name} (${cat.color ?? 'default'})`).join('\n') +
+            '\n\n💡 Use these categories when creating or updating pages.';
+
+        return {
+            content: [{
+                type: 'text' as const,
+                text: formattedOutput,
+            }],
+        };
+    } catch (error) {
+        console.error('Error listing categories:', error);
+        return {
+            content: [{
+                type: 'text' as const,
+                text: `❌ Failed to list categories: ${error instanceof Error ? error.message : String(error)}`,
+            }],
+        };
+    }
+}
+
+/**
  * Tool 3: Update Page (metadata and/or content)
  */
 export async function updatePageTool({ pageId, markdown, filePath, category, tags, description }: {
