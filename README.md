@@ -6,7 +6,6 @@ A **Model Context Protocol (MCP) server** that provides AI assistants with unifi
 
 Knowledge Hub is a production-ready MCP server that provides:
 
-- **📚 Local Documentation Access** - Read and serve markdown files from your local docs directory
 - **🧠 Guru Knowledge Base Integration** - Search, read, and manage Guru cards and collections  
 - **📝 Notion Database Management** - Create, query, update, and manage documentation in Notion databases
 - **🔍 Advanced Query & Search** - Powerful filtering, sorting, and search capabilities across all platforms
@@ -28,12 +27,7 @@ src/
 └── utils/                # Conversion utilities and helpers
 ```
 
-## 🛠️ Available Tools (11 Total)
-
-### 📚 Local Documentation (2 tools)
-
-- **`legacy-list-docs`** - Lists all available local documentation files by category
-- **`legacy-read-doc`** - Reads specific documentation files with fuzzy matching
+## 🛠️ Available Tools (9 Total)
 
 ### 🧠 Guru Knowledge Base (3 tools)
 

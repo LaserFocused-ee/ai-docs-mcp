@@ -37,3 +37,9 @@ logs
 
 # TypeScript
 *.tsbuildinfo
+
+# Legacy documentation
+docs_legacy/
+
+# IDE configurations
+.cursor/

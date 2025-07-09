@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { configureDocsTools } from './tools/docs.js';
 import { configureGuruTools } from './tools/guru.js';
 import { configureNotionTools } from './tools/notion.js';
 
@@ -16,8 +15,6 @@ export const SERVER_INFO = {
  */
 export function configureServer(server: McpServer): void {
 
-    // Configure documentation tools and resources
-    configureDocsTools(server);
 
     // Configure Guru API tools
     configureGuruTools(server);
@@ -38,9 +35,6 @@ export function configureServer(server: McpServer): void {
                 content: [{
                     type: "text",
                     text: `${greeting}\n\nThis is the Knowledge Hub MCP Server.\n\n` +
-                        `**Available Documentation:**\n` +
-                        `- Use resources like: docs://code_guidelines/flutter/best-practices\n` +
-                        `- Or legacy tools: legacy-list-docs, legacy-read-doc\n\n` +
                         `**Guru API Integration:**\n` +
                         `- guru-list-cards: Search and list Guru cards\n` +
                         `- guru-read-card: Read full card content\n` +

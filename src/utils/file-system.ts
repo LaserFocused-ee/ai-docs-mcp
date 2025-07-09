@@ -5,48 +5,8 @@
 
 import fs from 'fs-extra';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { DocumentInfo, MarkdownMetadata } from '../types/index.js';
+import { MarkdownMetadata } from '../types/index.js';
 
-/**
- * Get the docs directory path
- */
-export function getDocsDirectory(): string {
-    // Default to production mode unless explicitly set to development
-    const isDevelopment = process.env.NODE_ENV === 'development';
-
-    if (isDevelopment) {
-        // In development, require DEV_HOME environment variable
-        const devHome = process.env.DEV_HOME;
-        if (!devHome) {
-            throw new Error(
-                'DEV_HOME environment variable is required in development mode. ' +
-                'Please set DEV_HOME to the root path of your project'
-            );
-        }
-
-        const docsPath = path.join(devHome, 'docs');
-        if (!fs.existsSync(docsPath)) {
-            throw new Error(`Docs directory not found at ${docsPath}`);
-        }
-
-        return docsPath;
-    } else {
-        // In production, docs are copied to dist/docs during build
-        // Get the directory where this script is running from
-        const currentFile = fileURLToPath(import.meta.url);
-        const currentDir = path.dirname(currentFile);
-
-        // We're in dist/utils, so docs should be in dist/docs
-        const docsPath = path.join(path.dirname(currentDir), 'docs');
-
-        if (!fs.existsSync(docsPath)) {
-            throw new Error(`Docs directory not found at ${docsPath}. Build may have failed.`);
-        }
-
-        return docsPath;
-    }
-}
 
 /**
  * Read a markdown file from the filesystem
@@ -76,62 +36,6 @@ export async function writeMarkdownFile(filePath: string, content: string): Prom
     }
 }
 
-/**
- * List all available documentation files in the docs directory
- */
-export async function listAvailableDocuments(): Promise<DocumentInfo[]> {
-    const docsDirectory = getDocsDirectory();
-    const documents: DocumentInfo[] = [];
-
-    try {
-        // Check if directory exists
-        if (!fs.existsSync(docsDirectory)) {
-            console.error("Documentation directory not found:", docsDirectory);
-            console.error("Current working directory:", process.cwd());
-            console.error("Script path:", process.argv[1]);
-            return [];
-        }
-
-        // Function to recursively scan directories
-        async function scanDirectory(dirPath: string, category: string = ''): Promise<void> {
-            try {
-                const items = await fs.readdir(dirPath, { withFileTypes: true });
-
-                for (const item of items) {
-                    const itemPath = path.join(dirPath, item.name);
-
-                    if (item.isDirectory()) {
-                        // Add subdirectory to category path
-                        const newCategory = category
-                            ? `${category}/${item.name}`
-                            : item.name;
-
-                        // Skip hidden directories
-                        if (!item.name.startsWith('.')) {
-                            await scanDirectory(itemPath, newCategory);
-                        }
-                    } else if (item.isFile() && item.name.endsWith('.md') && item.name !== 'README.md') {
-                        // Process Markdown files, skip README files
-                        const name = item.name.replace('.md', '');
-                        documents.push({
-                            category,
-                            name,
-                            path: itemPath
-                        });
-                    }
-                }
-            } catch (err) {
-                console.error(`Error scanning directory ${dirPath}:`, err);
-            }
-        }
-
-        await scanDirectory(docsDirectory);
-        return documents;
-    } catch (error) {
-        console.error("Error scanning documentation directory:", error);
-        return [];
-    }
-}
 
 /**
  * Validate if a file path is safe and accessible
