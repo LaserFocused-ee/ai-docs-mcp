@@ -3,14 +3,14 @@
  * Creates properly formatted Notion blocks from content
  */
 
-import { NotionBlock, NotionRichText, NotionColor } from '../types/notion.js';
+import { NotionColor, NotionRichText } from '../types/notion.js';
 import { MarkdownNode } from '../types/markdown.js';
 
 // Type for building blocks (without server-generated metadata)
 export interface NotionBlockData {
     object: 'block';
     type: string;
-    [key: string]: any; // Type-specific properties
+    [key: string]: unknown; // Type-specific properties
 }
 
 /**
@@ -25,26 +25,28 @@ export function createRichText(
         code?: boolean;
         color?: NotionColor;
         link?: { url: string };
-    }
+    },
 ): NotionRichText[] {
-    if (!content) return [];
+    if (!content) {
+        return [];
+    }
 
     const richText: NotionRichText = {
         type: 'text',
         text: {
             content,
-            link: formatting?.link || null
+            link: formatting?.link ?? null,
         },
         annotations: {
-            bold: formatting?.bold || false,
-            italic: formatting?.italic || false,
-            strikethrough: formatting?.strikethrough || false,
+            bold: formatting?.bold ?? false,
+            italic: formatting?.italic ?? false,
+            strikethrough: formatting?.strikethrough ?? false,
             underline: false,
-            code: formatting?.code || false,
-            color: formatting?.color || 'default'
+            code: formatting?.code ?? false,
+            color: formatting?.color ?? 'default',
         },
         plain_text: content,
-        href: formatting?.link?.url || null
+        href: formatting?.link?.url ?? null,
     };
 
     return [richText];
@@ -57,13 +59,13 @@ export function createRichTextFromNodes(nodes: MarkdownNode[]): NotionRichText[]
     const richTextArray: NotionRichText[] = [];
 
     for (const node of nodes) {
-        if (node.type === 'text' && node.content) {
+        if (node.type === 'text' && node.content !== null && node.content !== undefined && node.content.length > 0) {
             const formatting = {
                 bold: node.bold,
                 italic: node.italic,
                 strikethrough: node.strikethrough,
                 code: node.code,
-                link: node.link
+                link: node.link,
             };
 
             richTextArray.push(...createRichText(node.content, formatting));
@@ -78,7 +80,7 @@ export function createRichTextFromNodes(nodes: MarkdownNode[]): NotionRichText[]
  */
 export function buildParagraphBlock(
     content: string | MarkdownNode[],
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content, formatting)
@@ -89,8 +91,8 @@ export function buildParagraphBlock(
         type: 'paragraph',
         paragraph: {
             rich_text: richText,
-            color: formatting?.color || 'default'
-        }
+            color: formatting?.color ?? 'default',
+        },
     };
 }
 
@@ -100,22 +102,22 @@ export function buildParagraphBlock(
 export function buildHeadingBlock(
     content: string | MarkdownNode[],
     level: 1 | 2 | 3,
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content, formatting)
         : createRichTextFromNodes(content);
 
-    const headingType = `heading_${level}` as 'heading_1' | 'heading_2' | 'heading_3';
+    const headingType = `heading_${level}`;
 
     return {
         object: 'block',
         type: headingType,
         [headingType]: {
             rich_text: richText,
-            color: formatting?.color || 'default',
-            is_toggleable: false
-        }
+            color: formatting?.color ?? 'default',
+            is_toggleable: false,
+        },
     };
 }
 
@@ -125,7 +127,7 @@ export function buildHeadingBlock(
 export function buildBulletedListItemBlock(
     content: string | MarkdownNode[],
     children?: NotionBlockData[],
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content, formatting)
@@ -136,9 +138,9 @@ export function buildBulletedListItemBlock(
         type: 'bulleted_list_item',
         bulleted_list_item: {
             rich_text: richText,
-            color: formatting?.color || 'default',
-            children: children || []
-        }
+            color: formatting?.color ?? 'default',
+            children: children ?? [],
+        },
     };
 }
 
@@ -148,7 +150,7 @@ export function buildBulletedListItemBlock(
 export function buildNumberedListItemBlock(
     content: string | MarkdownNode[],
     children?: NotionBlockData[],
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content, formatting)
@@ -159,9 +161,9 @@ export function buildNumberedListItemBlock(
         type: 'numbered_list_item',
         numbered_list_item: {
             rich_text: richText,
-            color: formatting?.color || 'default',
-            children: children || []
-        }
+            color: formatting?.color ?? 'default',
+            children: children ?? [],
+        },
     };
 }
 
@@ -172,7 +174,7 @@ export function buildToDoBlock(
     content: string | MarkdownNode[],
     checked: boolean = false,
     children?: NotionBlockData[],
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content, formatting)
@@ -184,9 +186,9 @@ export function buildToDoBlock(
         to_do: {
             rich_text: richText,
             checked,
-            color: formatting?.color || 'default',
-            children: children || []
-        }
+            color: formatting?.color ?? 'default',
+            children: children ?? [],
+        },
     };
 }
 
@@ -196,16 +198,16 @@ export function buildToDoBlock(
 export function buildCodeBlock(
     code: string,
     language?: string,
-    caption?: string
+    caption?: string,
 ): NotionBlockData {
     return {
         object: 'block',
         type: 'code',
         code: {
-            caption: caption ? createRichText(caption) : [],
+            caption: caption !== null && caption !== undefined && caption.length > 0 ? createRichText(caption) : [],
             rich_text: createRichText(code),
-            language: language || 'plain text'
-        }
+            language: language ?? 'plain text',
+        },
     };
 }
 
@@ -215,7 +217,7 @@ export function buildCodeBlock(
 export function buildQuoteBlock(
     content: string | MarkdownNode[],
     children?: NotionBlockData[],
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content, formatting)
@@ -226,9 +228,9 @@ export function buildQuoteBlock(
         type: 'quote',
         quote: {
             rich_text: richText,
-            color: formatting?.color || 'default',
-            children: children || []
-        }
+            color: formatting?.color ?? 'default',
+            children: children ?? [],
+        },
     };
 }
 
@@ -239,7 +241,7 @@ export function buildDividerBlock(): NotionBlockData {
     return {
         object: 'block',
         type: 'divider',
-        divider: {}
+        divider: {},
     };
 }
 
@@ -250,7 +252,7 @@ export function buildCalloutBlock(
     content: string | MarkdownNode[],
     icon?: string,
     color?: NotionColor,
-    children?: NotionBlockData[]
+    children?: NotionBlockData[],
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content)
@@ -261,16 +263,16 @@ export function buildCalloutBlock(
         type: 'callout',
         callout: {
             rich_text: richText,
-            icon: icon ? {
+            icon: icon !== null && icon !== undefined && icon.length > 0 ? {
                 type: 'emoji',
-                emoji: icon
+                emoji: icon,
             } : {
                 type: 'emoji',
-                emoji: '💡'
+                emoji: '💡',
             },
-            color: color || 'default',
-            children: children || []
-        }
+            color: color ?? 'default',
+            children: children ?? [],
+        },
     };
 }
 
@@ -280,7 +282,7 @@ export function buildCalloutBlock(
 export function buildToggleBlock(
     content: string | MarkdownNode[],
     children?: NotionBlockData[],
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     const richText = typeof content === 'string'
         ? createRichText(content)
@@ -291,9 +293,9 @@ export function buildToggleBlock(
         type: 'toggle',
         toggle: {
             rich_text: richText,
-            color: formatting?.color || 'default',
-            children: children || []
-        }
+            color: formatting?.color ?? 'default',
+            children: children ?? [],
+        },
     };
 }
 
@@ -304,9 +306,11 @@ export function buildToggleBlock(
 export function buildTableBlock(
     rows: string[][],
     hasColumnHeader: boolean = true,
-    hasRowHeader: boolean = false
+    hasRowHeader: boolean = false,
 ): NotionBlockData[] {
-    if (rows.length === 0) return [];
+    if (rows.length === 0) {
+        return [];
+    }
 
     const tableWidth = rows[0].length;
 
@@ -319,8 +323,8 @@ export function buildTableBlock(
             object: 'block',
             type: 'table_row',
             table_row: {
-                cells
-            }
+                cells,
+            },
         };
     });
 
@@ -332,8 +336,8 @@ export function buildTableBlock(
             table_width: tableWidth,
             has_column_header: hasColumnHeader,
             has_row_header: hasRowHeader,
-            children: tableRows
-        }
+            children: tableRows,
+        },
     };
 
     // Return only the table block (rows are nested as children)
@@ -347,9 +351,11 @@ export function buildTableBlock(
 export function buildTableBlockFromNodes(
     rows: MarkdownNode[][],
     hasColumnHeader: boolean = true,
-    hasRowHeader: boolean = false
+    hasRowHeader: boolean = false,
 ): NotionBlockData[] {
-    if (rows.length === 0) return [];
+    if (rows.length === 0) {
+        return [];
+    }
 
     const tableWidth = rows[0].length;
 
@@ -361,7 +367,7 @@ export function buildTableBlockFromNodes(
             if (cellNode.children && cellNode.children.length > 0) {
                 return createRichTextFromNodes(cellNode.children);
             } else {
-                return createRichText(cellNode.content || '');
+                return createRichText(cellNode.content ?? '');
             }
         });
 
@@ -369,8 +375,8 @@ export function buildTableBlockFromNodes(
             object: 'block',
             type: 'table_row',
             table_row: {
-                cells
-            }
+                cells,
+            },
         };
     });
 
@@ -382,8 +388,8 @@ export function buildTableBlockFromNodes(
             table_width: tableWidth,
             has_column_header: hasColumnHeader,
             has_row_header: hasRowHeader,
-            children: tableRows
-        }
+            children: tableRows,
+        },
     };
 
     // Return only the table block (rows are nested as children)
@@ -395,7 +401,7 @@ export function buildTableBlockFromNodes(
  */
 export function buildImageBlock(
     url: string,
-    caption?: string
+    caption?: string,
 ): NotionBlockData {
     const isExternal = url.startsWith('http://') || url.startsWith('https://');
 
@@ -405,10 +411,10 @@ export function buildImageBlock(
         image: {
             type: isExternal ? 'external' : 'file',
             [isExternal ? 'external' : 'file']: {
-                url: url
+                url: url,
             },
-            caption: caption ? createRichText(caption) : []
-        }
+            caption: caption !== null && caption !== undefined ? createRichText(caption) : [],
+        },
     };
 }
 
@@ -421,8 +427,8 @@ export function buildEmbedBlock(url: string, caption?: string): NotionBlockData 
         type: 'embed',
         embed: {
             url,
-            caption: caption ? createRichText(caption) : []
-        }
+            caption: caption !== null && caption !== undefined && caption.length > 0 ? createRichText(caption) : [],
+        },
     };
 }
 
@@ -435,8 +441,8 @@ export function buildBookmarkBlock(url: string, caption?: string): NotionBlockDa
         type: 'bookmark',
         bookmark: {
             url,
-            caption: caption ? createRichText(caption) : []
-        }
+            caption: caption !== null && caption !== undefined && caption.length > 0 ? createRichText(caption) : [],
+        },
     };
 }
 
@@ -448,7 +454,7 @@ export function buildListItemBlock(
     listType: 'bulleted' | 'numbered' | 'todo',
     checked?: boolean,
     children?: NotionBlockData[],
-    formatting?: { color?: NotionColor }
+    formatting?: { color?: NotionColor },
 ): NotionBlockData {
     switch (listType) {
         case 'bulleted':
@@ -456,7 +462,7 @@ export function buildListItemBlock(
         case 'numbered':
             return buildNumberedListItemBlock(content, children, formatting);
         case 'todo':
-            return buildToDoBlock(content, checked || false, children, formatting);
+            return buildToDoBlock(content, checked ?? false, children, formatting);
         default:
             return buildBulletedListItemBlock(content, children, formatting);
     }
@@ -466,8 +472,12 @@ export function buildListItemBlock(
  * Utility function to normalize heading levels for Notion (max H3)
  */
 export function normalizeHeadingLevel(level: number): 1 | 2 | 3 {
-    if (level <= 1) return 1;
-    if (level === 2) return 2;
+    if (level <= 1) {
+        return 1;
+    }
+    if (level === 2) {
+        return 2;
+    }
     return 3; // H4, H5, H6 all become H3 in Notion
 }
 
@@ -476,11 +486,11 @@ export function normalizeHeadingLevel(level: number): 1 | 2 | 3 {
  */
 export function buildFallbackBlock(
     content: string,
-    originalType?: string
+    originalType?: string,
 ): NotionBlockData {
-    const fallbackContent = originalType
+    const fallbackContent = originalType !== null && originalType !== undefined && originalType.length > 0
         ? `[Unsupported ${originalType}]: ${content}`
         : content;
 
     return buildParagraphBlock(fallbackContent, { color: 'gray' });
-} 
+}

@@ -13,4 +13,4 @@ export interface DocumentResource {
     name: string;
     description: string;
     mimeType: string;
-} 
+}

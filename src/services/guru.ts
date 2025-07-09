@@ -1,5 +1,5 @@
-import fetch from 'node-fetch';
-import { GuruCredentials, GuruSearchParams, GuruSearchResponse, GuruCard, GuruAttachment } from '../types/index.js';
+import fetch, { RequestInit, Response } from 'node-fetch';
+import { GuruAttachment, GuruCard, GuruCredentials, GuruSearchParams, GuruSearchResponse } from '../types/index.js';
 
 /**
  * Guru API Service for interacting with Guru's REST API
@@ -15,7 +15,7 @@ export class GuruService {
     private getCredentials(): GuruCredentials | null {
         const guruToken = process.env.GURU_TOKEN;
 
-        if (!guruToken) {
+        if (guruToken === null || guruToken === undefined || guruToken.length === 0) {
             return null;
         }
 
@@ -35,7 +35,7 @@ export class GuruService {
     /**
      * Make authenticated request to Guru API
      */
-    private async makeRequest(url: string, options: any = {}): Promise<any> {
+    private async makeRequest<T = unknown>(url: string, options: RequestInit = {}): Promise<T> {
         const credentials = this.getCredentials();
         if (!credentials) {
             throw new Error('GURU_TOKEN environment variable is required');
@@ -43,13 +43,13 @@ export class GuruService {
         const { username, token } = credentials;
         const auth = Buffer.from(`${username}:${token}`).toString('base64');
 
-        const response = await fetch(url, {
+        const response: Response = await fetch(url, {
             ...options,
             headers: {
                 'Authorization': `Basic ${auth}`,
                 'Content-Type': 'application/json',
-                ...options.headers
-            }
+                ...(options.headers ?? {}),
+            },
         });
 
         if (!response.ok) {
@@ -57,7 +57,7 @@ export class GuruService {
             throw new Error(`Guru API error (${response.status}): ${errorText}`);
         }
 
-        const jsonResponse = await response.json();
+        const jsonResponse = await response.json() as T;
         return jsonResponse;
     }
 
@@ -67,15 +67,27 @@ export class GuruService {
     async searchCards(params: GuruSearchParams = {}): Promise<GuruSearchResponse> {
         const queryParams = new URLSearchParams();
 
-        if (params.q) queryParams.append('q', params.q);
-        if (params.searchTerms) queryParams.append('searchTerms', params.searchTerms);
-        if (params.showArchived !== undefined) queryParams.append('showArchived', params.showArchived.toString());
-        if (params.maxResults) queryParams.append('maxResults', params.maxResults.toString());
-        if (params.sortField) queryParams.append('sortField', params.sortField);
-        if (params.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+        if (params.q !== null && params.q !== undefined && params.q.length > 0) {
+            queryParams.append('q', params.q);
+        }
+        if (params.searchTerms !== null && params.searchTerms !== undefined && params.searchTerms.length > 0) {
+            queryParams.append('searchTerms', params.searchTerms);
+        }
+        if (params.showArchived !== undefined) {
+            queryParams.append('showArchived', params.showArchived.toString());
+        }
+        if (params.maxResults !== undefined && params.maxResults > 0) {
+            queryParams.append('maxResults', params.maxResults.toString());
+        }
+        if (params.sortField !== null && params.sortField !== undefined && params.sortField.length > 0) {
+            queryParams.append('sortField', params.sortField);
+        }
+        if (params.sortOrder !== null && params.sortOrder !== undefined && params.sortOrder.length > 0) {
+            queryParams.append('sortOrder', params.sortOrder);
+        }
 
         const url = `${this.baseUrl}/search/query?${queryParams.toString()}`;
-        return this.makeRequest(url);
+        return this.makeRequest<GuruSearchResponse>(url);
     }
 
     /**
@@ -83,7 +95,7 @@ export class GuruService {
      */
     async getCard(cardId: string): Promise<GuruCard> {
         const url = `${this.baseUrl}/cards/${cardId}`;
-        return this.makeRequest(url);
+        return this.makeRequest<GuruCard>(url);
     }
 
     /**
@@ -97,7 +109,7 @@ export class GuruService {
         while ((match = attachmentRegex.exec(htmlContent)) !== null) {
             attachments.push({
                 url: match[0],
-                fileId: match[1]
+                fileId: match[1],
             });
         }
 
@@ -118,8 +130,8 @@ export class GuruService {
         const url = `${this.fileBaseUrl}/files/view/${fileId}`;
         const response = await fetch(url, {
             headers: {
-                'Authorization': `Basic ${auth}`
-            }
+                'Authorization': `Basic ${auth}`,
+            },
         });
 
         if (!response.ok) {
@@ -137,4 +149,4 @@ export class GuruService {
         const card = await this.getCard(cardId);
         return this.extractAttachments(card.content);
     }
-} 
+}

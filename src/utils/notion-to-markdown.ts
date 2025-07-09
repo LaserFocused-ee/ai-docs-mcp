@@ -2,8 +2,8 @@
  * Notion to Markdown conversion engine
  */
 
-import { NotionBlock, NotionRichText, NotionColor } from '../types/notion.js';
-import { ConversionOptions, ConversionResult, ConversionMetadata, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
+import { NotionBlock, NotionColor, NotionRichText } from '../types/notion.js';
+import { ConversionMetadata, ConversionOptions, ConversionResult, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
 import { NotionBlockData } from './notion-blocks.js';
 
 /**
@@ -11,7 +11,7 @@ import { NotionBlockData } from './notion-blocks.js';
  */
 export function notionBlocksToMarkdown(
     blocks: (NotionBlock | NotionBlockData)[],
-    options: Partial<ConversionOptions> = {}
+    options: Partial<ConversionOptions> = {},
 ): ConversionResult {
     const config = { ...DEFAULT_CONVERSION_OPTIONS, ...options };
     const startTime = Date.now();
@@ -20,7 +20,7 @@ export function notionBlocksToMarkdown(
     const errors: string[] = [];
     const unsupportedBlocks: string[] = [];
 
-    let totalBlocks = blocks.length;
+    const totalBlocks = blocks.length;
     let convertedBlocks = 0;
     let skippedBlocks = 0;
     let errorBlocks = 0;
@@ -45,7 +45,7 @@ export function notionBlocksToMarkdown(
             const block = blocks[i];
 
             // Skip blocks that have already been processed by their parent (e.g., table_row blocks processed by table)
-            if (processedBlockIds.has(block.id)) {
+            if (typeof block.id === 'string' && processedBlockIds?.has(block.id)) {
                 continue;
             }
 
@@ -62,12 +62,12 @@ export function notionBlocksToMarkdown(
                 }
 
                 const markdown = convertNotionBlock(block, config, warnings, errors, unsupportedBlocks, numberedListCounter, 0, processedBlockIds);
-                if (markdown) {
+                if (markdown !== null) {
                     markdownLines.push(markdown);
 
                     // Add spacing based on block type and what follows
                     const nextBlock = blocks[i + 1];
-                    if (nextBlock) {
+                    if (nextBlock !== null) {
                         // Always add blank line after numbered list items
                         if (block.type === 'numbered_list_item') {
                             markdownLines.push('');
@@ -89,13 +89,13 @@ export function notionBlocksToMarkdown(
 
                 lastBlockType = block.type;
             } catch (error) {
-                errors.push(`Error converting block ${block.type}: ${error}`);
+                errors.push(`Error converting block ${block.type}: ${error instanceof Error ? error.message : String(error)}`);
                 errorBlocks++;
 
                 if (config.handleUnsupportedBlocks === 'convert') {
                     markdownLines.push(`<!-- Error converting ${block.type} block -->`);
                 } else if (config.handleUnsupportedBlocks === 'error') {
-                    throw new Error(`Failed to convert ${block.type}: ${error}`);
+                    throw new Error(`Failed to convert ${block.type}: ${error instanceof Error ? error.message : String(error)}`);
                 }
             }
         }
@@ -110,7 +110,7 @@ export function notionBlocksToMarkdown(
             toolVersion: '1.0.0',
             options: config,
             processingTime,
-            nodeCount: totalBlocks
+            nodeCount: totalBlocks,
         };
 
         const statistics: ConversionStatistics = {
@@ -118,8 +118,8 @@ export function notionBlocksToMarkdown(
             convertedBlocks,
             skippedBlocks,
             errorBlocks,
-            unsupportedBlocks: [...new Set(unsupportedBlocks)],
-            warnings
+            unsupportedBlocks: Array.from(new Set(unsupportedBlocks)),
+            warnings,
         };
 
         return {
@@ -127,10 +127,10 @@ export function notionBlocksToMarkdown(
             warnings,
             errors,
             metadata,
-            statistics
+            statistics,
         };
     } catch (error) {
-        errors.push(`Conversion failed: ${error}`);
+        errors.push(`Conversion failed: ${error instanceof Error ? error.message : String(error)}`);
         errorBlocks = totalBlocks;
 
         return {
@@ -144,16 +144,16 @@ export function notionBlocksToMarkdown(
                 toolVersion: '1.0.0',
                 options: config,
                 processingTime: Date.now() - startTime,
-                nodeCount: totalBlocks
+                nodeCount: totalBlocks,
             },
             statistics: {
                 totalBlocks,
                 convertedBlocks: 0,
                 skippedBlocks: 0,
                 errorBlocks,
-                unsupportedBlocks: [...new Set(unsupportedBlocks)],
-                warnings
-            }
+                unsupportedBlocks: Array.from(new Set(unsupportedBlocks)),
+                warnings,
+            },
         };
     }
 }
@@ -167,61 +167,61 @@ function convertNotionBlock(
     warnings: string[],
     errors: string[],
     unsupportedBlocks: string[],
-    numberedListCounter: number = 0,
-    indentLevel: number = 0,
-    processedBlockIds?: Set<string>
+    numberedListCounter = 0,
+    indentLevel = 0,
+    processedBlockIds?: Set<string>,
 ): string | null {
     let result = '';
 
     switch (block.type) {
         case 'paragraph':
-            result = convertParagraph(block, options);
+            result = convertParagraph(block as { paragraph?: { rich_text?: NotionRichText[] } }, options);
             break;
 
         case 'heading_1':
         case 'heading_2':
         case 'heading_3':
-            result = convertHeading(block, options);
+            result = convertHeading(block as { type: string; [key: string]: { rich_text?: NotionRichText[] } | string }, options);
             break;
 
         case 'bulleted_list_item':
-            result = convertBulletedListItem(block, options, indentLevel);
+            result = convertBulletedListItem(block as { bulleted_list_item?: { rich_text?: NotionRichText[] } }, options, indentLevel);
             break;
 
         case 'numbered_list_item':
-            result = convertNumberedListItem(block, options, numberedListCounter, indentLevel);
+            result = convertNumberedListItem(block as { numbered_list_item?: { rich_text?: NotionRichText[] } }, options, numberedListCounter, indentLevel);
             break;
 
         case 'to_do':
-            result = convertToDoItem(block, options, indentLevel);
+            result = convertToDoItem(block as { to_do?: { rich_text?: NotionRichText[]; checked?: boolean } }, options, indentLevel);
             break;
 
         case 'code':
-            result = convertCodeBlock(block, options);
+            result = convertCodeBlock(block as { code?: { rich_text?: NotionRichText[]; language?: string } }, options);
             break;
 
         case 'quote':
-            result = convertQuote(block, options);
+            result = convertQuote(block as { quote?: { rich_text?: NotionRichText[] } }, options);
             break;
 
         case 'divider':
-            result = convertDivider(options);
+            result = convertDivider();
             break;
 
         case 'callout':
-            result = convertCallout(block, options, warnings);
+            result = convertCallout(block as { callout?: { rich_text?: NotionRichText[]; icon?: { emoji?: string } } }, options, warnings);
             break;
 
         case 'toggle':
-            result = convertToggle(block, options, warnings);
+            result = convertToggle(block as { toggle?: { rich_text?: NotionRichText[] } }, options, warnings);
             break;
 
         case 'image':
-            result = convertImage(block, options, warnings);
+            result = convertImage(block as { image?: { external?: { url?: string }; file?: { url?: string }; caption?: NotionRichText[] } }, options, warnings);
             break;
 
         case 'table':
-            result = convertTable(block, options, warnings, processedBlockIds);
+            result = convertTable(block as { children?: Array<{ type: string; id?: string; table_row?: { cells?: NotionRichText[][] } }> }, options, warnings, processedBlockIds);
             break;
 
         case 'table_row':
@@ -231,11 +231,11 @@ function convertNotionBlock(
             return null;
 
         case 'embed':
-            result = convertEmbed(block, options);
+            result = convertEmbed(block as { embed?: { url?: string; caption?: NotionRichText[] } }, options);
             break;
 
         case 'bookmark':
-            result = convertBookmark(block, options);
+            result = convertBookmark(block as { bookmark?: { url?: string; caption?: NotionRichText[] } }, options);
             break;
 
         default:
@@ -252,12 +252,13 @@ function convertNotionBlock(
     }
 
     // Handle nested children if they exist
-    if (block.children && block.children.length > 0) {
+    const children = block.children as (NotionBlock | NotionBlockData)[] | undefined;
+    if (children && Array.isArray(children) && children.length > 0) {
         const childrenMarkdown: string[] = [];
         let childNumberedCounter = 0;
         let lastChildType = '';
 
-        for (const child of block.children) {
+        for (const child of children) {
             // Track numbered list continuity for children
             if (child.type === 'numbered_list_item') {
                 if (lastChildType !== 'numbered_list_item') {
@@ -277,9 +278,9 @@ function convertNotionBlock(
                 unsupportedBlocks,
                 childNumberedCounter,
                 indentLevel + 1,
-                processedBlockIds
+                processedBlockIds,
             );
-            if (childMarkdown) {
+            if (childMarkdown !== null) {
                 childrenMarkdown.push(childMarkdown);
             }
 
@@ -298,22 +299,23 @@ function convertNotionBlock(
  * Convert paragraph block
  */
 function convertParagraph(
-    block: any,
-    options: ConversionOptions
+    block: { paragraph?: { rich_text?: NotionRichText[] } },
+    options: ConversionOptions,
 ): string {
-    const text = convertRichTextToMarkdown(block.paragraph?.rich_text || [], options);
-    return text || '';
+    const text = convertRichTextToMarkdown(block.paragraph?.rich_text ?? [], options);
+    return text ?? '';
 }
 
 /**
  * Convert heading block
  */
 function convertHeading(
-    block: any,
-    options: ConversionOptions
+    block: { type: string; [key: string]: { rich_text?: NotionRichText[] } | string },
+    options: ConversionOptions,
 ): string {
     const level = getHeadingLevel(block.type);
-    const text = convertRichTextToMarkdown(block[block.type]?.rich_text || [], options);
+    const headingContent = block[block.type] as { rich_text?: NotionRichText[] } | undefined;
+    const text = convertRichTextToMarkdown(headingContent?.rich_text ?? [], options);
 
     const headingPrefix = '#'.repeat(level);
 
@@ -333,11 +335,11 @@ function convertHeading(
  * Convert bulleted list item
  */
 function convertBulletedListItem(
-    block: any,
+    block: { bulleted_list_item?: { rich_text?: NotionRichText[] } },
     options: ConversionOptions,
-    indentLevel: number
+    indentLevel: number,
 ): string {
-    const text = convertRichTextToMarkdown(block.bulleted_list_item?.rich_text || [], options);
+    const text = convertRichTextToMarkdown(block.bulleted_list_item?.rich_text ?? [], options);
     const marker = options.listMarker;
 
     // Use 3 spaces for proper markdown indentation
@@ -349,14 +351,14 @@ function convertBulletedListItem(
  * Convert numbered list item
  */
 function convertNumberedListItem(
-    block: any,
+    block: { numbered_list_item?: { rich_text?: NotionRichText[] } },
     options: ConversionOptions,
     numberedListIndex: number,
-    indentLevel: number
+    indentLevel: number,
 ): string {
-    const text = convertRichTextToMarkdown(block.numbered_list_item?.rich_text || [], options);
+    const text = convertRichTextToMarkdown(block.numbered_list_item?.rich_text ?? [], options);
 
-    // Use 3 spaces for proper markdown indentation  
+    // Use 3 spaces for proper markdown indentation
     const indent = indentLevel === 0 ? '' : '   '.repeat(indentLevel);
     return `${indent}${numberedListIndex}. ${text}`;
 }
@@ -365,12 +367,12 @@ function convertNumberedListItem(
  * Convert to-do item
  */
 function convertToDoItem(
-    block: any,
+    block: { to_do?: { rich_text?: NotionRichText[]; checked?: boolean } },
     options: ConversionOptions,
-    indentLevel: number
+    indentLevel: number,
 ): string {
-    const text = convertRichTextToMarkdown(block.to_do?.rich_text || [], options);
-    const checked = block.to_do?.checked ? 'x' : ' ';
+    const text = convertRichTextToMarkdown(block.to_do?.rich_text ?? [], options);
+    const checked = block.to_do?.checked === true ? 'x' : ' ';
 
     // Use 3 spaces for proper markdown indentation
     const indent = indentLevel === 0 ? '' : '   '.repeat(indentLevel);
@@ -381,11 +383,11 @@ function convertToDoItem(
  * Convert code block
  */
 function convertCodeBlock(
-    block: any,
-    options: ConversionOptions
+    block: { code?: { rich_text?: NotionRichText[]; language?: string } },
+    options: ConversionOptions,
 ): string {
-    const code = convertRichTextToMarkdown(block.code?.rich_text || [], options);
-    const language = block.code?.language || '';
+    const code = convertRichTextToMarkdown(block.code?.rich_text ?? [], options);
+    const language = block.code?.language ?? '';
 
     if (options.codeBlockStyle === 'fenced') {
         return `\`\`\`${language}\n${code}\n\`\`\``;
@@ -403,10 +405,10 @@ function convertCodeBlock(
  * Convert quote block
  */
 function convertQuote(
-    block: any,
-    options: ConversionOptions
+    block: { quote?: { rich_text?: NotionRichText[] } },
+    options: ConversionOptions,
 ): string {
-    const text = convertRichTextToMarkdown(block.quote?.rich_text || [], options);
+    const text = convertRichTextToMarkdown(block.quote?.rich_text ?? [], options);
 
     return `> ${text}`;
 }
@@ -414,7 +416,7 @@ function convertQuote(
 /**
  * Convert divider
  */
-function convertDivider(options: ConversionOptions): string {
+function convertDivider(): string {
     return '---';
 }
 
@@ -422,10 +424,10 @@ function convertDivider(options: ConversionOptions): string {
  * Convert table block
  */
 function convertTable(
-    block: any,
+    block: { children?: Array<{ type: string; id?: string; table_row?: { cells?: NotionRichText[][] } }> },
     options: ConversionOptions,
     warnings: string[],
-    processedBlockIds?: Set<string>
+    processedBlockIds?: Set<string>,
 ): string {
     if (!block.children || block.children.length === 0) {
         warnings.push('Table block has no rows');
@@ -439,11 +441,11 @@ function convertTable(
     for (const row of block.children) {
         if (row.type === 'table_row') {
             // Mark this table_row as processed so it won't be processed again in the main loop
-            if (processedBlockIds && row.id) {
+            if (processedBlockIds !== null && processedBlockIds !== undefined && row.id !== null && row.id !== undefined) {
                 processedBlockIds.add(row.id);
             }
 
-            const cells = row.table_row?.cells || [];
+            const cells = row.table_row?.cells ?? [];
             const cellTexts: string[] = [];
 
             // Convert each cell
@@ -479,17 +481,17 @@ function convertTable(
  * Convert callout block
  */
 function convertCallout(
-    block: any,
+    block: { callout?: { rich_text?: NotionRichText[]; icon?: { emoji?: string } } },
     options: ConversionOptions,
-    warnings: string[]
+    warnings: string[],
 ): string {
     if (!options.convertCallouts) {
         warnings.push('Callout block skipped (convertCallouts disabled)');
         return '';
     }
 
-    const text = convertRichTextToMarkdown(block.callout?.rich_text || [], options);
-    const icon = block.callout?.icon?.emoji || '';
+    const text = convertRichTextToMarkdown(block.callout?.rich_text ?? [], options);
+    const icon = block.callout?.icon?.emoji ?? '';
 
     // Convert to blockquote with icon
     return `> ${icon} ${text}`;
@@ -499,11 +501,11 @@ function convertCallout(
  * Convert toggle block
  */
 function convertToggle(
-    block: any,
+    block: { toggle?: { rich_text?: NotionRichText[] } },
     options: ConversionOptions,
-    warnings: string[]
+    warnings: string[],
 ): string {
-    const text = convertRichTextToMarkdown(block.toggle?.rich_text || [], options);
+    const text = convertRichTextToMarkdown(block.toggle?.rich_text ?? [], options);
 
     if (!options.convertToggles) {
         warnings.push('Toggle block converted to paragraph (convertToggles disabled)');
@@ -518,9 +520,9 @@ function convertToggle(
  * Convert image block
  */
 function convertImage(
-    block: any,
+    block: { image?: { external?: { url?: string }; file?: { url?: string }; caption?: NotionRichText[] } },
     options: ConversionOptions,
-    warnings: string[]
+    warnings: string[],
 ): string {
     const image = block.image;
     if (!image) {
@@ -528,8 +530,8 @@ function convertImage(
         return '';
     }
 
-    const url = image.external?.url || image.file?.url || '';
-    const caption = convertRichTextToMarkdown(image.caption || [], options);
+    const url = image.external?.url ?? image.file?.url ?? '';
+    const caption = convertRichTextToMarkdown(image.caption ?? [], options);
 
     if (!url) {
         warnings.push('Image block missing URL');
@@ -543,11 +545,11 @@ function convertImage(
  * Convert embed block
  */
 function convertEmbed(
-    block: any,
-    options: ConversionOptions
+    block: { embed?: { url?: string; caption?: NotionRichText[] } },
+    options: ConversionOptions,
 ): string {
-    const url = block.embed?.url || '';
-    const caption = convertRichTextToMarkdown(block.embed?.caption || [], options);
+    const url = block.embed?.url ?? '';
+    const caption = convertRichTextToMarkdown(block.embed?.caption ?? [], options);
 
     // Convert to link with caption
     return caption ? `[${caption}](${url})` : url;
@@ -557,11 +559,11 @@ function convertEmbed(
  * Convert bookmark block
  */
 function convertBookmark(
-    block: any,
-    options: ConversionOptions
+    block: { bookmark?: { url?: string; caption?: NotionRichText[] } },
+    options: ConversionOptions,
 ): string {
-    const url = block.bookmark?.url || '';
-    const caption = convertRichTextToMarkdown(block.bookmark?.caption || [], options);
+    const url = block.bookmark?.url ?? '';
+    const caption = convertRichTextToMarkdown(block.bookmark?.caption ?? [], options);
 
     return caption ? `[${caption}](${url})` : url;
 }
@@ -571,9 +573,9 @@ function convertBookmark(
  */
 function convertRichTextToMarkdown(
     richText: NotionRichText[],
-    options: ConversionOptions
+    options: ConversionOptions,
 ): string {
-    if (!richText || richText.length === 0) {
+    if (richText === null || richText.length === 0) {
         return '';
     }
 
@@ -587,9 +589,9 @@ function convertRichTextToMarkdown(
  */
 function convertSingleRichText(
     text: NotionRichText,
-    options: ConversionOptions
+    options: ConversionOptions,
 ): string {
-    let content = text.plain_text || '';
+    let content = text.plain_text ?? '';
 
     if (!content) {
         return '';
@@ -617,9 +619,11 @@ function convertSingleRichText(
     }
 
     // Handle links
-    if (text.href || text.text?.link?.url) {
-        const url = text.href || text.text?.link?.url;
-        content = `[${content}](${url})`;
+    if ((text.href ?? text.text?.link?.url) !== null) {
+        const url = text.href ?? text.text?.link?.url;
+        if (url !== null) {
+            content = `[${content}](${url})`;
+        }
     }
 
     // Handle colors (if preserving)
@@ -656,8 +660,8 @@ function getColorValue(color: NotionColor): string {
         'purple': '#6940A5',
         'pink': '#AD1A72',
         'red': '#E03E3E',
-        'default': 'inherit'
+        'default': 'inherit',
     };
 
-    return colorMap[color] || colorMap['default'];
+    return colorMap[color] ?? colorMap['default'];
 }

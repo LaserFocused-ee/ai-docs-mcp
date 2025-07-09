@@ -3,7 +3,6 @@
  */
 
 import { DocumentInfo } from './docs.js';
-import { NotionBlock, NotionRichText } from './notion.js';
 
 // Core AST representation
 export interface MarkdownNode {
@@ -18,7 +17,7 @@ export interface MarkdownNode {
     title?: string; // For images and links
     align?: 'left' | 'center' | 'right'; // For table cells
     children?: MarkdownNode[];
-    attributes?: Record<string, any>;
+    attributes?: Record<string, unknown>;
     // Rich text formatting
     bold?: boolean;
     italic?: boolean;
@@ -36,7 +35,7 @@ export interface MarkdownMetadata {
     author?: string;
     date?: string;
     lastModified?: string;
-    frontMatter?: Record<string, any>;
+    frontMatter?: Record<string, unknown>;
     wordCount?: number;
     headings?: Array<{ level: number; text: string; anchor?: string }>;
 }
@@ -86,7 +85,7 @@ export interface ConversionOptions {
 
 // Result of a conversion operation
 export interface ConversionResult {
-    content: any[] | string; // Can be NotionBlock[], NotionBlockData[], or string
+    content: Record<string, unknown>[] | string; // Can be NotionBlock[], NotionBlockData[], or string
     warnings: string[];
     errors: string[];
     metadata: ConversionMetadata;
@@ -178,7 +177,7 @@ export const DEFAULT_CONVERSION_OPTIONS: ConversionOptions = {
     indentSize: 2,
     codeBlockStyle: 'fenced',
     listMarker: '-',
-    emphasisMarker: '*'
+    emphasisMarker: '*',
 };
 
 // Default parser options
@@ -188,5 +187,5 @@ export const DEFAULT_PARSER_OPTIONS: ParserOptions = {
     includeSourceMap: false,
     preserveWhitespace: false,
     allowHtml: true,
-    allowUnsafeHtml: false
-}; 
+    allowUnsafeHtml: false,
+};

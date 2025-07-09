@@ -37,6 +37,10 @@
     "dev": "node --loader ts-node/esm src/index.ts",
     "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint 'src/**/*.ts' --fix",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint",
     "inspect": "npm run build && npx @modelcontextprotocol/inspector node -r dotenv/config dist/index.js dotenv_config_path=.env.inspector",
     "inspect:ui": "npm run build && npx @modelcontextprotocol/inspector node -r dotenv/config dist/index.js dotenv_config_path=.env.inspector",
     "inspect:cli": "npm run build && npx @modelcontextprotocol/inspector --cli node -r dotenv/config dist/index.js dotenv_config_path=.env.inspector",
@@ -45,7 +49,8 @@
     "inspect:cli:test": "npm run build && npx @modelcontextprotocol/inspector --cli node -r dotenv/config dist/index.js dotenv_config_path=.env.inspector --method resources/list && npx @modelcontextprotocol/inspector --cli node -r dotenv/config dist/index.js dotenv_config_path=.env.inspector --method tools/list",
     "inspect:cli:hello": "npm run build && npx @modelcontextprotocol/inspector --cli node -r dotenv/config dist/index.js dotenv_config_path=.env.inspector --method tools/call --tool-name hello --tool-arg name=\"Developer\"",
     "test:inspector": "npm run build && npm run inspect:cli:test && npm run inspect:cli:hello",
-    "validate": "npm run build && npm run inspect:cli:tools && npm run inspect:cli:hello"
+    "validate": "npm run build && npm run inspect:cli:tools && npm run inspect:cli:hello",
+    "prepare": "husky"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
@@ -67,9 +72,24 @@
     "@types/fs-extra": "^11.0.4",
     "@types/mdast": "^4.0.4",
     "@types/node": "^22.15.2",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
     "cross-env": "^7.0.3",
     "dotenv-cli": "^8.0.0",
+    "eslint": "^8.57.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
+    "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "typescript": "^4.9.5"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "tsc --noEmit"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   }
 }

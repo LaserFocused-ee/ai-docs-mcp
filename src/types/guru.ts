@@ -48,4 +48,4 @@ export interface GuruSearchParams {
 export interface GuruAttachment {
     url: string;
     fileId: string;
-} 
+}

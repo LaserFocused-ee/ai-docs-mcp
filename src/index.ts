@@ -2,14 +2,14 @@
 
 /**
  * AI Knowledge Hub MCP Server - Main Entry Point
- * 
+ *
  * This file creates and runs an MCP server for accessing documentation
- * and integrating with Guru API. It supports standard JSON-RPC MCP 
+ * and integrating with Guru API. It supports standard JSON-RPC MCP
  * protocol over stdio.
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SERVER_INFO, configureServer } from './server.js';
 
 // Create the MCP server
@@ -21,16 +21,16 @@ const server = new McpServer({
     tools: {},
     resources: {
       subscribe: true,
-      listChanged: true
-    }
-  }
+      listChanged: true,
+    },
+  },
 });
 
 // Configure the server with tools and resources
 configureServer(server);
 
 // Main function to connect and start the server
-async function main() {
+async function main(): Promise<void> {
   // Create and connect to the stdio transport
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -41,6 +41,6 @@ async function main() {
 
 // Start the server and handle errors
 main().catch((error) => {
-  console.error("Fatal error in main():", error);
+  console.error('Fatal error in main():', error);
   process.exit(1);
 });

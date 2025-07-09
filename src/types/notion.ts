@@ -52,7 +52,7 @@ export interface NotionBlock {
     archived: boolean;
     in_trash: boolean;
     type: string;
-    [key: string]: any; // Type-specific properties
+    [key: string]: unknown; // Type-specific properties
 }
 
 export interface NotionUser {
@@ -130,14 +130,14 @@ export interface NotionRichText {
 export interface NotionProperty {
     id: string;
     type: string;
-    [key: string]: any; // Type-specific values
+    [key: string]: unknown; // Type-specific values
 }
 
 export interface NotionDatabaseProperty {
     id: string;
     name: string;
     type: string;
-    [key: string]: any; // Type-specific configuration
+    [key: string]: unknown; // Type-specific configuration
 }
 
 export interface NotionParent {
@@ -183,7 +183,7 @@ export interface NotionSearchResults {
     next_cursor: string | null;
     has_more: boolean;
     type?: 'page_or_database';
-    page_or_database?: {};
+    page_or_database?: object;
 }
 
 export interface NotionDatabaseQueryResults {
@@ -192,7 +192,7 @@ export interface NotionDatabaseQueryResults {
     next_cursor: string | null;
     has_more: boolean;
     type?: 'page';
-    page?: {};
+    page?: object;
 }
 
 export interface NotionBlockChildren {
@@ -201,7 +201,7 @@ export interface NotionBlockChildren {
     next_cursor: string | null;
     has_more: boolean;
     type?: 'block';
-    block?: {};
+    block?: object;
 }
 
 export interface NotionCommentResults {
@@ -210,7 +210,7 @@ export interface NotionCommentResults {
     next_cursor: string | null;
     has_more: boolean;
     type?: 'comment';
-    comment?: {};
+    comment?: object;
 }
 
 export interface NotionUserResults {
@@ -219,7 +219,7 @@ export interface NotionUserResults {
     next_cursor: string | null;
     has_more: boolean;
     type?: 'user';
-    user?: {};
+    user?: object;
 }
 
 // Filter and sort interfaces for database queries
@@ -227,7 +227,7 @@ export interface NotionDatabaseFilter {
     and?: NotionDatabaseFilter[];
     or?: NotionDatabaseFilter[];
     property?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 export interface NotionDatabaseSort {
@@ -239,14 +239,14 @@ export interface NotionDatabaseSort {
 // Request/Response interfaces
 export interface CreatePageRequest {
     parent: NotionParent;
-    properties?: Record<string, any>;
-    children?: any[];
+    properties?: Record<string, unknown>;
+    children?: unknown[];
     icon?: NotionIcon;
     cover?: NotionFile;
 }
 
 export interface UpdatePageRequest {
-    properties?: Record<string, any>;
+    properties?: Record<string, unknown>;
     archived?: boolean;
     in_trash?: boolean;
     icon?: NotionIcon;
@@ -254,7 +254,7 @@ export interface UpdatePageRequest {
 }
 
 export interface AppendBlockChildrenRequest {
-    children: any[];
+    children: unknown[];
     after?: string;
 }
 
@@ -283,4 +283,4 @@ export interface SearchRequest {
     };
     start_cursor?: string;
     page_size?: number;
-} 
+}

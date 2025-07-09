@@ -4,11 +4,68 @@
  */
 
 import { z } from 'zod';
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NotionService } from '../services/notion.js';
 import { extractPageTitle } from '../utils/converters.js';
-import path from 'path';
-import fs from 'fs';
+
+interface NotionPage {
+    id: string;
+    url?: string;
+    created_time: string;
+    last_edited_time: string;
+    properties?: {
+        Category?: {
+            select?: { name: string };
+        };
+        Status?: {
+            select?: { name: string };
+        };
+        Tags?: {
+            multi_select?: Array<{ name: string }>;
+        };
+    };
+}
+
+interface NotionDatabaseResult {
+    results: NotionPage[];
+    has_more: boolean;
+    next_cursor?: string;
+}
+
+interface NotionPageCreationResult {
+    page: NotionPage;
+    conversionResult: {
+        statistics?: {
+            convertedBlocks?: number;
+            totalBlocks?: number;
+        };
+        warnings?: string[];
+        errors?: string[];
+    };
+}
+
+interface NotionPageUpdateResult {
+    newPageId: string;
+    conversionResult: {
+        statistics?: {
+            convertedBlocks?: number;
+            totalBlocks?: number;
+        };
+        warnings?: string[];
+        errors?: string[];
+    };
+}
+
+interface NotionPageExportResult {
+    page: NotionPage;
+    markdown: string;
+    conversionResult: {
+        statistics?: {
+            totalBlocks?: number;
+        };
+        warnings?: string[];
+    };
+}
 
 // Global service instance
 let notionService: NotionService;
@@ -16,10 +73,10 @@ let notionService: NotionService;
 /**
  * Initialize the NotionService with configuration
  */
-export async function initializeNotionService(): Promise<void> {
+export function initializeNotionService(): void {
     const notionToken = process.env.NOTION_TOKEN;
-    if (!notionToken) {
-        console.warn('NOTION_TOKEN environment variable not set - Notion tools will not be functional');
+    if (notionToken === undefined || notionToken === '') {
+        // Note: Notion tools will not be functional without NOTION_TOKEN
         return;
     }
     notionService = new NotionService({ token: notionToken });
@@ -40,7 +97,7 @@ export async function listDatabasePagesTool({
     status,
     sortBy = 'last_edited',
     sortOrder = 'descending',
-    startCursor
+    startCursor,
 }: {
     limit?: number;
     search?: string;
@@ -50,24 +107,24 @@ export async function listDatabasePagesTool({
     sortBy?: 'title' | 'last_edited' | 'created' | 'category' | 'status';
     sortOrder?: 'ascending' | 'descending';
     startCursor?: string;
-}) {
+}): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
-        if (!notionService) {
+        if (notionService === undefined) {
             return {
                 content: [{
-                    type: "text" as const,
-                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
-                }]
+                    type: 'text' as const,
+                    text: '🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
             };
         }
 
         const databaseId = process.env.NOTION_MCP_DATABASE_ID;
-        if (!databaseId) {
+        if (databaseId === undefined || databaseId === '') {
             return {
                 content: [{
-                    type: "text" as const,
-                    text: `🔐 Notion database not configured: NOTION_MCP_DATABASE_ID environment variable is required.\n\nTo use Notion tools, set NOTION_MCP_DATABASE_ID in your MCP configuration.`
-                }]
+                    type: 'text' as const,
+                    text: '🔐 Notion database not configured: NOTION_MCP_DATABASE_ID environment variable is required.\n\nTo use Notion tools, set NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
             };
         }
 
@@ -79,18 +136,18 @@ export async function listDatabasePagesTool({
             status,
             sortBy,
             sortOrder,
-            startCursor
-        });
+            startCursor,
+        }) as NotionDatabaseResult;
 
         if (result.results.length === 0) {
-            let noResultsMsg = "📋 No pages found";
+            let noResultsMsg = '📋 No pages found';
 
             // Add context about active filters
             const activeFilters: string[] = [];
-            if (search) activeFilters.push(`search: "${search}"`);
-            if (category) activeFilters.push(`category: "${category}"`);
-            if (status) activeFilters.push(`status: "${status}"`);
-            if (tags && tags.length > 0) activeFilters.push(`tags: [${tags.join(', ')}]`);
+            if (search !== undefined && search !== '') {activeFilters.push(`search: "${search}"`);}
+            if (category !== undefined && category !== '') {activeFilters.push(`category: "${category}"`);}
+            if (status !== undefined && status !== '') {activeFilters.push(`status: "${status}"`);}
+            if (tags !== undefined && tags.length > 0) {activeFilters.push(`tags: [${tags.join(', ')}]`);}
 
             if (activeFilters.length > 0) {
                 noResultsMsg += ` with filters: ${activeFilters.join(', ')}`;
@@ -98,26 +155,26 @@ export async function listDatabasePagesTool({
 
             return {
                 content: [{
-                    type: "text" as const,
-                    text: noResultsMsg
-                }]
+                    type: 'text' as const,
+                    text: noResultsMsg,
+                }],
             };
         }
 
-        const pageList = result.results.map((page: any) => {
+        const pageList = result.results.map((page: NotionPage) => {
             const title = extractPageTitle(page);
-            const category = page.properties?.Category?.select?.name || '';
-            const status = page.properties?.Status?.select?.name || '';
-            const tags = page.properties?.Tags?.multi_select?.map((tag: any) => tag.name) || [];
+            const category = page.properties?.Category?.select?.name ?? '';
+            const status = page.properties?.Status?.select?.name ?? '';
+            const tags = page.properties?.Tags?.multi_select?.map((tag) => tag.name) ?? [];
             const lastEdited = new Date(page.last_edited_time).toLocaleDateString();
             const created = new Date(page.created_time).toLocaleDateString();
 
             let pageInfo = `• **${title}**\n  ID: ${page.id}`;
-            if (category) pageInfo += `\n  Category: ${category}`;
-            if (status) pageInfo += `\n  Status: ${status}`;
-            if (tags.length > 0) pageInfo += `\n  Tags: ${tags.join(', ')}`;
+            if (category !== '') {pageInfo += `\n  Category: ${category}`;}
+            if (status !== '') {pageInfo += `\n  Status: ${status}`;}
+            if (tags.length > 0) {pageInfo += `\n  Tags: ${tags.join(', ')}`;}
             pageInfo += `\n  Last edited: ${lastEdited}`;
-            if (sortBy === 'created') pageInfo += `\n  Created: ${created}`;
+            if (sortBy === 'created') {pageInfo += `\n  Created: ${created}`;}
 
             return pageInfo;
         }).join('\n\n');
@@ -131,10 +188,10 @@ export async function listDatabasePagesTool({
 
         // Add active filters info
         const activeFilters: string[] = [];
-        if (search) activeFilters.push(`🔍 "${search}"`);
-        if (category) activeFilters.push(`📁 ${category}`);
-        if (status) activeFilters.push(`📊 ${status}`);
-        if (tags && tags.length > 0) activeFilters.push(`🏷️ ${tags.join(', ')}`);
+        if (search !== undefined && search !== '') {activeFilters.push(`🔍 "${search}"`);}
+        if (category !== undefined && category !== '') {activeFilters.push(`📁 ${category}`);}
+        if (status !== undefined && status !== '') {activeFilters.push(`📊 ${status}`);}
+        if (tags !== undefined && tags.length > 0) {activeFilters.push(`🏷️ ${tags.join(', ')}`);}
         if (sortBy !== 'last_edited' || sortOrder !== 'descending') {
             activeFilters.push(`🔄 ${sortBy} (${sortOrder})`);
         }
@@ -145,21 +202,21 @@ export async function listDatabasePagesTool({
 
         // Add pagination info
         if (result.has_more) {
-            headerText += `\n**Pagination:** Use startCursor: "${result.next_cursor}" for next page`;
+            headerText += `\n**Pagination:** Use startCursor: "${result.next_cursor ?? ''}" for next page`;
         }
 
         return {
             content: [{
-                type: "text" as const,
-                text: `${headerText}\n\n${pageList}`
-            }]
+                type: 'text' as const,
+                text: `${headerText}\n\n${pageList}`,
+            }],
         };
     } catch (error) {
         return {
             content: [{
-                type: "text" as const,
-                text: `❌ Failed to query database pages:\n${error instanceof Error ? error.message : String(error)}`
-            }]
+                type: 'text' as const,
+                text: `❌ Failed to query database pages:\n${error instanceof Error ? error.message : String(error)}`,
+            }],
         };
     }
 }
@@ -177,24 +234,24 @@ export async function createPageFromMarkdownTool({ markdown, filePath, pageTitle
         description?: string;
         status?: string;
     };
-}) {
+}): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
-        if (!notionService) {
+        if (notionService === undefined) {
             return {
                 content: [{
-                    type: "text" as const,
-                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
-                }]
+                    type: 'text' as const,
+                    text: '🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
             };
         }
 
         const databaseId = process.env.NOTION_MCP_DATABASE_ID;
-        if (!databaseId) {
+        if (databaseId === undefined || databaseId === '') {
             return {
                 content: [{
-                    type: "text" as const,
-                    text: `🔐 Notion database not configured: NOTION_MCP_DATABASE_ID environment variable is required.\n\nTo use Notion tools, set NOTION_MCP_DATABASE_ID in your MCP configuration.`
-                }]
+                    type: 'text' as const,
+                    text: '🔐 Notion database not configured: NOTION_MCP_DATABASE_ID environment variable is required.\n\nTo use Notion tools, set NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
             };
         }
 
@@ -202,25 +259,25 @@ export async function createPageFromMarkdownTool({ markdown, filePath, pageTitle
             markdown,
             filePath,
             pageTitle,
-            metadata
-        });
+            metadata,
+        }) as NotionPageCreationResult;
 
         return {
             content: [{
-                type: "text" as const,
-                text: `✅ Page created successfully!\n\n**Page Details:**\n- Title: ${pageTitle || 'Untitled'}\n- ID: ${result.page.id}\n- URL: ${result.page.url}\n\n**Conversion Statistics:**\n- Blocks created: ${result.conversionResult.statistics?.convertedBlocks || 0}\n- Warnings: ${result.conversionResult.warnings?.length || 0}\n- Errors: ${result.conversionResult.errors?.length || 0}`
-            }]
+                type: 'text' as const,
+                text: `✅ Page created successfully!\n\n**Page Details:**\n- Title: ${pageTitle ?? 'Untitled'}\n- ID: ${result.page.id}\n- URL: ${result.page.url ?? 'N/A'}\n\n**Conversion Statistics:**\n- Blocks created: ${result.conversionResult.statistics?.convertedBlocks ?? 0}\n- Warnings: ${result.conversionResult.warnings?.length ?? 0}\n- Errors: ${result.conversionResult.errors?.length ?? 0}`,
+            }],
         };
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
 
         // Check if this is a code block length error from Notion API
         if (errorMessage.includes('should be ≤ `2000`') && errorMessage.includes('text.content.length')) {
-            const sourceDescription = filePath || 'the provided markdown content';
+            const sourceDescription = filePath ?? 'the provided markdown content';
 
             return {
                 content: [{
-                    type: "text" as const,
+                    type: 'text' as const,
                     text: `🚫 **Code Block Too Large for Notion**
 
 **Problem:** The document contains a code block that exceeds Notion's 2000 character limit.
@@ -282,17 +339,17 @@ gin 1. **🚨 CRITICAL: Make a copy of the original file first** - Never modify 
 5. Try uploading the COPY to test the fix
 6. Only suggest replacing the original if the user explicitly approves
 
-This approach ensures the documentation remains readable and useful while meeting Notion's technical constraints.`
-                }]
+This approach ensures the documentation remains readable and useful while meeting Notion's technical constraints.`,
+                }],
             };
         }
 
         // For other errors, return the standard error message
         return {
             content: [{
-                type: "text" as const,
-                text: `❌ Page creation failed:\n${errorMessage}`
-            }]
+                type: 'text' as const,
+                text: `❌ Page creation failed:\n${errorMessage}`,
+            }],
         };
     }
 }
@@ -307,42 +364,42 @@ export async function updatePageTool({ pageId, markdown, filePath, category, tag
     category?: string;
     tags?: string[];
     description?: string;
-}) {
+}): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
-        if (!notionService) {
+        if (notionService === undefined) {
             return {
                 content: [{
-                    type: "text" as const,
-                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
-                }]
+                    type: 'text' as const,
+                    text: '🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
             };
         }
 
-        const updates = [];
-        let conversionResult = null;
+        const updates: string[] = [];
+        let conversionResult: NotionPageUpdateResult['conversionResult'] | null = null;
 
         // Handle content updates (create new page with updated content, archive old page)
-        if (markdown || filePath) {
+        if ((markdown !== undefined && markdown !== '') || (filePath !== undefined && filePath !== '')) {
             const result = await notionService.updatePageContent(pageId, {
                 markdown,
-                filePath
-            });
+                filePath,
+            }) as NotionPageUpdateResult;
             conversionResult = result.conversionResult;
             pageId = result.newPageId; // Update to new page ID
-            updates.push(`Content replaced (${result.conversionResult.statistics?.convertedBlocks || 0} blocks) - NEW PAGE ID: ${result.newPageId}`);
+            updates.push(`Content replaced (${result.conversionResult.statistics?.convertedBlocks ?? 0} blocks) - NEW PAGE ID: ${result.newPageId}`);
         }
 
         // Handle metadata updates
-        const metadata: any = {};
-        if (category) {
+        const metadata: Record<string, string | string[]> = {};
+        if (category !== undefined && category !== '') {
             metadata.category = category;
             updates.push(`Category: ${category}`);
         }
-        if (tags) {
+        if (tags !== undefined) {
             metadata.tags = tags;
             updates.push(`Tags: ${tags.join(', ')}`);
         }
-        if (description) {
+        if (description !== undefined && description !== '') {
             metadata.description = description;
             updates.push(`Description: ${description}`);
         }
@@ -354,21 +411,21 @@ export async function updatePageTool({ pageId, markdown, filePath, category, tag
         let responseText = `✅ Page updated successfully!\n\n**Page ID:** ${pageId}\n**Updates Applied:**\n${updates.map(u => `• ${u}`).join('\n')}`;
 
         if (conversionResult) {
-            responseText += `\n\n**Content Conversion:**\n- Blocks created: ${conversionResult.statistics?.convertedBlocks || 0}\n- Warnings: ${conversionResult.warnings?.length || 0}\n- Errors: ${conversionResult.errors?.length || 0}`;
+            responseText += `\n\n**Content Conversion:**\n- Blocks created: ${conversionResult.statistics?.convertedBlocks ?? 0}\n- Warnings: ${conversionResult.warnings?.length ?? 0}\n- Errors: ${conversionResult.errors?.length ?? 0}`;
         }
 
         return {
             content: [{
-                type: "text" as const,
-                text: responseText
-            }]
+                type: 'text' as const,
+                text: responseText,
+            }],
         };
     } catch (error) {
         return {
             content: [{
-                type: "text" as const,
-                text: `❌ Page update failed:\n${error instanceof Error ? error.message : String(error)}`
-            }]
+                type: 'text' as const,
+                text: `❌ Page update failed:\n${error instanceof Error ? error.message : String(error)}`,
+            }],
         };
     }
 }
@@ -378,14 +435,14 @@ export async function updatePageTool({ pageId, markdown, filePath, category, tag
  */
 export async function archivePageTool({ pageId }: {
     pageId: string;
-}) {
+}): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
-        if (!notionService) {
+        if (notionService === undefined) {
             return {
                 content: [{
-                    type: "text" as const,
-                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
-                }]
+                    type: 'text' as const,
+                    text: '🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
             };
         }
 
@@ -393,16 +450,16 @@ export async function archivePageTool({ pageId }: {
 
         return {
             content: [{
-                type: "text" as const,
-                text: `✅ Page archived successfully!\n\n**Page ID:** ${pageId}\n**Status:** The page has been moved to trash and is no longer visible in the database.`
-            }]
+                type: 'text' as const,
+                text: `✅ Page archived successfully!\n\n**Page ID:** ${pageId}\n**Status:** The page has been moved to trash and is no longer visible in the database.`,
+            }],
         };
     } catch (error) {
         return {
             content: [{
-                type: "text" as const,
-                text: `❌ Page archival failed:\n${error instanceof Error ? error.message : String(error)}`
-            }]
+                type: 'text' as const,
+                text: `❌ Page archival failed:\n${error instanceof Error ? error.message : String(error)}`,
+            }],
         };
     }
 }
@@ -413,32 +470,32 @@ export async function archivePageTool({ pageId }: {
 export async function exportPageToMarkdownTool({ pageId, saveToFile }: {
     pageId: string;
     saveToFile?: string; // absolute file path
-}) {
+}): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
-        if (!notionService) {
+        if (notionService === undefined) {
             return {
                 content: [{
-                    type: "text" as const,
-                    text: `🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.`
-                }]
+                    type: 'text' as const,
+                    text: '🔐 Notion API not configured: NOTION_TOKEN environment variable is required.\n\nTo use Notion tools, set NOTION_TOKEN and NOTION_MCP_DATABASE_ID in your MCP configuration.',
+                }],
             };
         }
 
-        const result = await notionService.exportPageToMarkdown(pageId);
+        const result = await notionService.exportPageToMarkdown(pageId) as NotionPageExportResult;
         const pageTitle = extractPageTitle(result.page);
 
-        let responseText = `✅ Page exported successfully!\n\n**Page Title:** ${pageTitle}\n\n**Markdown Content:**\n\`\`\`markdown\n${result.markdown}\n\`\`\`\n\n**Statistics:**\n- Blocks processed: ${result.conversionResult.statistics?.totalBlocks || 0}\n- Warnings: ${result.conversionResult.warnings?.length || 0}`;
+        let responseText = `✅ Page exported successfully!\n\n**Page Title:** ${pageTitle}\n\n**Markdown Content:**\n\`\`\`markdown\n${result.markdown}\n\`\`\`\n\n**Statistics:**\n- Blocks processed: ${result.conversionResult.statistics?.totalBlocks ?? 0}\n- Warnings: ${result.conversionResult.warnings?.length ?? 0}`;
 
         // Show warning details only in development mode
         if (process.env.NODE_ENV === 'development' && result.conversionResult.warnings && result.conversionResult.warnings.length > 0) {
-            responseText += `\n\n**🔧 WARNING DETAILS (dev mode):**\n`;
+            responseText += '\n\n**🔧 WARNING DETAILS (dev mode):**\n';
             result.conversionResult.warnings.forEach((warning, index) => {
                 responseText += `${index + 1}. ${warning}\n`;
             });
         }
 
         // Save to file if path specified
-        if (saveToFile) {
+        if (saveToFile !== undefined && saveToFile !== '') {
             const fs = await import('fs');
             const path = await import('path');
 
@@ -461,21 +518,19 @@ export async function exportPageToMarkdownTool({ pageId, saveToFile }: {
 
         return {
             content: [{
-                type: "text" as const,
-                text: responseText
-            }]
+                type: 'text' as const,
+                text: responseText,
+            }],
         };
     } catch (error) {
         return {
             content: [{
-                type: "text" as const,
-                text: `❌ Page export failed:\n${error instanceof Error ? error.message : String(error)}`
-            }]
+                type: 'text' as const,
+                text: `❌ Page export failed:\n${error instanceof Error ? error.message : String(error)}`,
+            }],
         };
     }
 }
-
-
 
 // ========================================
 // MCP TOOL CONFIGURATION
@@ -488,8 +543,8 @@ export function configureNotionTools(server: McpServer): void {
     // Initialize the notion service (it will handle token checking internally)
     try {
         initializeNotionService();
-    } catch (error) {
-        console.error('Failed to initialize Notion service:', error);
+    } catch {
+        // Note: Failed to initialize Notion service - tools will not be functional
         return;
     }
     // Tool 1: List/Query/Search Database Pages
@@ -504,7 +559,7 @@ export function configureNotionTools(server: McpServer): void {
             status: z.string().optional().describe('Filter by publication status. Available statuses: "published" (live docs), "draft" (work in progress), "archived" (deprecated), "review" (pending approval). Usually use "published" for production queries.'),
             sortBy: z.enum(['title', 'last_edited', 'created', 'category', 'status']).optional().describe('Sort field (default: last_edited). Use "last_edited" for newest content, "title" for alphabetical, "created" for chronological, "category" to group by type.'),
             sortOrder: z.enum(['ascending', 'descending']).optional().describe('Sort direction (default: descending). Descending shows newest/latest first, ascending shows oldest/earliest first.'),
-            startCursor: z.string().optional().describe('Pagination cursor from previous response to get next page of results. Only use if previous response indicated "has_more: true".')
+            startCursor: z.string().optional().describe('Pagination cursor from previous response to get next page of results. Only use if previous response indicated "has_more: true".'),
         },
         async (args: {
             limit?: number;
@@ -517,7 +572,7 @@ export function configureNotionTools(server: McpServer): void {
             startCursor?: string;
         }) => {
             return listDatabasePagesTool(args);
-        }
+        },
     );
 
     // Tool 2: Create Page from Markdown
@@ -532,8 +587,8 @@ export function configureNotionTools(server: McpServer): void {
                 category: z.string().optional().describe('Page category for organization. Must be one of: "best-practices", "architecture", "api-reference", "testing", "examples", "guides", "reference". Helps with discovery and filtering.'),
                 tags: z.array(z.string()).optional().describe('Array of tags for categorization and discovery. Examples: ["flutter", "riverpod", "testing"], ["architecture", "patterns"], ["ui", "widgets"]. Use relevant technology and topic tags.'),
                 description: z.string().optional().describe('Brief description of the page content. Will be searchable and shown in listings. Keep concise but descriptive.'),
-                status: z.string().optional().describe('Publication status. Use "published" for live docs, "draft" for work in progress, "review" for pending approval. Default is usually "published".')
-            }).optional().describe('Metadata object containing category, tags, description, and status for the page. All fields optional but recommended for discoverability.')
+                status: z.string().optional().describe('Publication status. Use "published" for live docs, "draft" for work in progress, "review" for pending approval. Default is usually "published".'),
+            }).optional().describe('Metadata object containing category, tags, description, and status for the page. All fields optional but recommended for discoverability.'),
         },
         async (args: {
             markdown?: string;
@@ -547,7 +602,7 @@ export function configureNotionTools(server: McpServer): void {
             };
         }) => {
             return createPageFromMarkdownTool(args);
-        }
+        },
     );
 
     // Tool 3: Update Page
@@ -560,7 +615,7 @@ export function configureNotionTools(server: McpServer): void {
             filePath: z.string().optional().describe('Absolute file system path to markdown file to replace page content. Cannot be used with markdown. WARNING: This replaces ALL existing content.'),
             category: z.string().optional().describe('Update page category. Must be one of: "best-practices", "architecture", "api-reference", "testing", "examples", "guides", "reference". Leave blank to keep existing.'),
             tags: z.array(z.string()).optional().describe('Replace page tags completely with this array. Examples: ["flutter", "riverpod", "updated"]. Leave blank to keep existing tags. This REPLACES all tags, not adds to them.'),
-            description: z.string().optional().describe('Update page description. Will be searchable. Leave blank to keep existing description.')
+            description: z.string().optional().describe('Update page description. Will be searchable. Leave blank to keep existing description.'),
         },
         async (args: {
             pageId: string;
@@ -571,7 +626,7 @@ export function configureNotionTools(server: McpServer): void {
             description?: string;
         }) => {
             return updatePageTool(args);
-        }
+        },
     );
 
     // Tool 4: Archive Page
@@ -579,11 +634,11 @@ export function configureNotionTools(server: McpServer): void {
         'archive-page',
         'Archive (soft delete) a Notion page by moving it to trash. The page will be removed from the database and no longer visible in listings. Use this to remove outdated or incorrect documentation. Cannot be undone via API.',
         {
-            pageId: z.string().describe('Notion page ID to archive (from list-database-pages results). Format: "20de87a1-81d0-8197-931a-ece2d3207b4b". Page will be moved to trash.')
+            pageId: z.string().describe('Notion page ID to archive (from list-database-pages results). Format: "20de87a1-81d0-8197-931a-ece2d3207b4b". Page will be moved to trash.'),
         },
         async (args: { pageId: string }) => {
             return archivePageTool(args);
-        }
+        },
     );
 
     // Tool 5: Export Page to Markdown
@@ -592,12 +647,11 @@ export function configureNotionTools(server: McpServer): void {
         'Export a Notion page to clean markdown format. Converts all Notion blocks back to standard markdown syntax. Uses optimized parallel block fetching for improved performance.',
         {
             pageId: z.string().describe('Notion page ID to export (from list-database-pages results). Format: "20de87a1-81d0-8197-931a-ece2d3207b4b"'),
-            saveToFile: z.string().optional().describe('Absolute file system path to save the markdown file (e.g., "/Users/username/docs/export.md"). If provided, file will be created/overwritten. Directory must exist or will be created.')
+            saveToFile: z.string().optional().describe('Absolute file system path to save the markdown file (e.g., "/Users/username/docs/export.md"). If provided, file will be created/overwritten. Directory must exist or will be created.'),
         },
         async (args: { pageId: string; saveToFile?: string }) => {
             return exportPageToMarkdownTool(args);
-        }
+        },
     );
 
-
-} 
+}

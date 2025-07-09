@@ -1,26 +1,25 @@
 import {
-    NotionConfig,
-    NotionPage,
-    NotionDatabase,
-    NotionBlock,
-    NotionUser,
-    NotionComment,
-    NotionRichText,
-    NotionColor,
-    NotionDatabaseQueryResults,
-    NotionBlockChildren,
-    NotionCommentResults,
-    CreatePageRequest,
-    UpdatePageRequest,
     AppendBlockChildrenRequest,
     CreateCommentRequest,
+    CreatePageRequest,
     DatabaseQueryRequest,
+    NotionBlock,
+    NotionBlockChildren,
+    NotionColor,
+    NotionComment,
+    NotionCommentResults,
+    NotionConfig,
+    NotionDatabase,
+    NotionDatabaseQueryResults,
+    NotionPage,
+    NotionRichText,
+    UpdatePageRequest,
 } from '../types/notion.js';
-import { ConversionOptions, ConversionResult, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
-import { markdownToNotion, notionToMarkdown, extractTitleFromMarkdown, extractPageTitle } from '../utils/converters.js';
+import { ConversionOptions, ConversionResult } from '../types/markdown.js';
+import { extractPageTitle, extractTitleFromMarkdown, markdownToNotion, notionToMarkdown } from '../utils/converters.js';
 import { NotionBlockData } from '../utils/notion-blocks.js';
 import { readMarkdownFile, validateFilePath } from '../utils/file-system.js';
-import path from 'path';
+import { basename } from 'path';
 
 export class NotionService {
     private config: NotionConfig;
@@ -34,94 +33,93 @@ export class NotionService {
     private async getPropertyType(databaseId: string, propertyName: string): Promise<string | null> {
         // Check cache first
         const dbCache = this.propertyTypeCache.get(databaseId);
-        if (dbCache?.has(propertyName)) {
-            return dbCache.get(propertyName) || null;
+        if (dbCache?.has(propertyName) === true) {
+            return dbCache.get(propertyName) ?? null;
         }
 
         try {
             const database = await this.getDatabase(databaseId);
-            const propertyType = database.properties[propertyName]?.type || null;
-            
+            const propertyType = database.properties[propertyName]?.type ?? null;
+
             // Cache the result
             if (!this.propertyTypeCache.has(databaseId)) {
                 this.propertyTypeCache.set(databaseId, new Map());
             }
-            this.propertyTypeCache.get(databaseId)!.set(propertyName, propertyType || '');
-            
+            this.propertyTypeCache.get(databaseId)!.set(propertyName, propertyType ?? '');
+
             return propertyType;
-        } catch (error) {
-            console.error(`Failed to get property type for ${propertyName}:`, error);
+        } catch {
+            // Property type lookup failed, return null
             return null;
         }
     }
 
     private async setPropertyValue(
-        properties: any, 
-        propertyName: string, 
-        value: any, 
-        databaseId: string
+        properties: Record<string, unknown>,
+        propertyName: string,
+        value: unknown,
+        databaseId: string,
     ): Promise<void> {
         const propertyType = await this.getPropertyType(databaseId, propertyName);
-        
-        if (!propertyType) {
-            console.warn(`Property ${propertyName} not found in database schema`);
+
+        if (propertyType === null) {
+            // Property not found in database schema, skip setting
             return;
         }
-
-        console.log(`Setting ${propertyName} as ${propertyType} with value:`, value);
 
         switch (propertyType) {
             case 'select':
                 properties[propertyName] = { select: { name: String(value) } };
                 break;
-                
+
             case 'multi_select':
-                properties[propertyName] = { 
-                    multi_select: Array.isArray(value) 
+                properties[propertyName] = {
+                    multi_select: Array.isArray(value)
                         ? value.map(v => ({ name: String(v) }))
-                        : [{ name: String(value) }]
+                        : [{ name: String(value) }],
                 };
                 break;
-                
+
             case 'title':
-                properties[propertyName] = { 
-                    title: [{ text: { content: String(value) } }] 
+                properties[propertyName] = {
+                    title: [{ text: { content: String(value) } }],
                 };
                 break;
-                
+
             case 'rich_text':
-                properties[propertyName] = { 
-                    rich_text: [{ text: { content: String(value) } }] 
+                properties[propertyName] = {
+                    rich_text: [{ text: { content: String(value) } }],
                 };
                 break;
-                
+
             case 'checkbox':
                 properties[propertyName] = { checkbox: Boolean(value) };
                 break;
-                
+
             case 'number':
                 properties[propertyName] = { number: Number(value) };
                 break;
-                
+
             case 'url':
                 properties[propertyName] = { url: String(value) };
                 break;
-                
+
             default:
-                console.warn(`Unsupported property type ${propertyType} for ${propertyName}`);
+                // Unsupported property type, skip setting
+                break;
         }
     }
 
     private async makeRequest<T>(
         endpoint: string,
         method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET',
-        body?: any
+        body?: unknown,
     ): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`;
 
         const headers: Record<string, string> = {
             'Authorization': `Bearer ${this.config.token}`,
-            'Notion-Version': this.config.version || '2022-06-28',
+            'Notion-Version': this.config.version ?? '2022-06-28',
             'Content-Type': 'application/json',
         };
 
@@ -130,7 +128,7 @@ export class NotionService {
             headers,
         };
 
-        if (body && (method === 'POST' || method === 'PATCH')) {
+        if (body !== undefined && (method === 'POST' || method === 'PATCH')) {
             options.body = JSON.stringify(body);
         }
 
@@ -139,18 +137,18 @@ export class NotionService {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                let errorData;
+                let errorData: { message?: string };
                 try {
-                    errorData = JSON.parse(errorText);
+                    errorData = JSON.parse(errorText) as { message?: string };
                 } catch {
                     errorData = { message: errorText };
                 }
 
-                throw new Error(`Notion API Error ${response.status}: ${errorData.message || response.statusText}`);
+                throw new Error(`Notion API Error ${response.status}: ${errorData.message ?? response.statusText}`);
             }
 
-            const data = await response.json();
-            return data as T;
+            const data = await response.json() as T;
+            return data;
         } catch (error) {
             if (error instanceof Error) {
                 throw error;
@@ -169,11 +167,11 @@ export class NotionService {
         return this.makeRequest<NotionDatabaseQueryResults>(
             `/databases/${database_id}/query`,
             'POST',
-            queryBody
+            queryBody,
         );
     }
 
-    async updateDatabase(databaseId: string, updateData: any): Promise<NotionDatabase> {
+    async updateDatabase(databaseId: string, updateData: unknown): Promise<NotionDatabase> {
         return this.makeRequest<NotionDatabase>(`/databases/${databaseId}`, 'PATCH', updateData);
     }
 
@@ -192,29 +190,29 @@ export class NotionService {
 
     async archivePage(pageId: string): Promise<NotionPage> {
         return this.makeRequest<NotionPage>(`/pages/${pageId}`, 'PATCH', {
-            archived: true
+            archived: true,
         });
     }
 
     // Block operations
     async getBlockChildren(blockId: string, startCursor?: string): Promise<NotionBlockChildren> {
         const params = new URLSearchParams();
-        if (startCursor) {
+        if (startCursor !== undefined) {
             params.append('start_cursor', startCursor);
         }
         const queryString = params.toString();
-        const url = `/blocks/${blockId}/children${queryString ? `?${queryString}` : ''}`;
+        const url = `/blocks/${blockId}/children${queryString.length > 0 ? `?${queryString}` : ''}`;
         return this.makeRequest<NotionBlockChildren>(url);
     }
 
     async appendBlockChildren(
         blockId: string,
-        request: AppendBlockChildrenRequest
+        request: AppendBlockChildrenRequest,
     ): Promise<NotionBlockChildren> {
         return this.makeRequest<NotionBlockChildren>(
             `/blocks/${blockId}/children`,
             'PATCH',
-            request
+            request,
         );
     }
 
@@ -223,8 +221,8 @@ export class NotionService {
      */
     async appendBlockChildrenChunked(
         blockId: string,
-        blocks: any[],
-        maxBlocksPerRequest: number = 100
+        blocks: NotionBlockData[],
+        maxBlocksPerRequest: number = 100,
     ): Promise<NotionBlockChildren[]> {
         const results: NotionBlockChildren[] = [];
 
@@ -233,7 +231,7 @@ export class NotionService {
             const chunk = blocks.slice(i, i + maxBlocksPerRequest);
 
             const result = await this.appendBlockChildren(blockId, {
-                children: chunk
+                children: chunk,
             });
 
             results.push(result);
@@ -242,7 +240,7 @@ export class NotionService {
         return results;
     }
 
-    async updateBlock(blockId: string, updateData: any): Promise<NotionBlock> {
+    async updateBlock(blockId: string, updateData: unknown): Promise<NotionBlock> {
         return this.makeRequest<NotionBlock>(`/blocks/${blockId}`, 'PATCH', updateData);
     }
 
@@ -266,7 +264,7 @@ export class NotionService {
         let startCursor: string | undefined;
 
         while (hasMore) {
-            const response = await this.getBlockChildren(blockId);
+            const response = await this.getBlockChildren(blockId, startCursor);
 
             for (const block of response.results) {
                 allBlocks.push(block);
@@ -275,12 +273,12 @@ export class NotionService {
                 if (block.has_children) {
                     const children = await this.getAllBlocksRecursively(block.id);
                     // Add children property to the block
-                    (block as any).children = children;
+                    (block as NotionBlock & { children?: NotionBlock[] }).children = children;
                 }
             }
 
             hasMore = response.has_more;
-            startCursor = response.next_cursor || undefined;
+            startCursor = response.next_cursor ?? undefined;
         }
 
         return allBlocks;
@@ -291,7 +289,7 @@ export class NotionService {
         // Create a semaphore to limit concurrent API calls
         const { Sema } = await import('async-sema');
         const semaphore = new Sema(maxConcurrency, {
-            capacity: maxConcurrency
+            capacity: maxConcurrency,
         });
 
         // Helper to fetch all pages for a single block (handles pagination)
@@ -306,7 +304,7 @@ export class NotionService {
                     const response = await this.getBlockChildren(parentBlockId, startCursor);
                     allBlocks.push(...response.results);
                     hasMore = response.has_more;
-                    startCursor = response.next_cursor || undefined;
+                    startCursor = response.next_cursor ?? undefined;
                 } finally {
                     semaphore.release();
                 }
@@ -352,13 +350,13 @@ export class NotionService {
                 if (level > 1) {
                     const parentBlock = allBlocks.find(b => b.id === parentId);
                     if (parentBlock) {
-                        (parentBlock as any).children = children;
+                        (parentBlock as NotionBlock & { children?: NotionBlock[] }).children = children;
                     }
                 } else {
                     // For level 1, attach children to blocks in allBlocks
                     for (const block of allBlocks) {
                         if (block.id === parentId) {
-                            (block as any).children = children;
+                            (block as NotionBlock & { children?: NotionBlock[] }).children = children;
                         }
                     }
                 }
@@ -381,13 +379,13 @@ export class NotionService {
             code: boolean;
             color: NotionColor;
         }>,
-        link?: string
+        link?: string,
     ): NotionRichText {
         return {
             type: 'text' as const,
             text: {
                 content,
-                link: link ? { url: link } : null,
+                link: link !== undefined ? { url: link } : null,
             },
             annotations: {
                 bold: false,
@@ -422,25 +420,25 @@ export class NotionService {
                 description?: string;
                 status?: string;
             };
-        }
+        },
     ): Promise<{ page: NotionPage; conversionResult: ConversionResult }> {
         try {
             let markdown: string;
             let { pageTitle } = options;
 
             // Determine which input to use
-            if (options.markdown && options.filePath) {
+            if (options.markdown !== undefined && options.filePath !== undefined) {
                 throw new Error('Cannot provide both markdown content and filePath. Please provide only one.');
             }
 
-            if (options.markdown) {
+            if (options.markdown !== undefined) {
                 markdown = options.markdown;
-            } else if (options.filePath) {
+            } else if (options.filePath !== undefined) {
                 // Read file and extract title if not provided
                 markdown = await readMarkdownFile(options.filePath);
 
-                if (!pageTitle) {
-                    const filename = path.basename(options.filePath, '.md');
+                if (pageTitle === undefined) {
+                    const filename = basename(options.filePath, '.md');
                     pageTitle = filename.replace(/[-_]/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
                 }
             } else {
@@ -448,82 +446,80 @@ export class NotionService {
             }
 
             // Convert markdown to blocks using utility function
-            const conversionResult = await markdownToNotion(markdown, options.conversionOptions || {});
+            const conversionResult = markdownToNotion(markdown, options.conversionOptions ?? {});
 
-            if (conversionResult.errors.length > 0) {
-                console.warn('Conversion warnings:', conversionResult.warnings);
-            }
+            // Conversion complete - warnings are handled internally
 
             const blocks = conversionResult.content as NotionBlockData[];
 
             // Extract title from markdown if not provided
-            if (!pageTitle) {
+            if (pageTitle === undefined) {
                 const extractedTitle = extractTitleFromMarkdown(markdown);
-                pageTitle = extractedTitle || 'Untitled';
+                pageTitle = extractedTitle ?? 'Untitled';
             }
 
             // Get the correct title property name for this database
             const titlePropertyName = await this.getTitlePropertyName(databaseId);
 
             // Build page properties
-            let properties: any = {
+            let properties: Record<string, unknown> = {
                 [titlePropertyName]: {
-                    type: "title",
+                    type: 'title',
                     title: [
                         {
-                            type: "text",
+                            type: 'text',
                             text: {
-                                content: pageTitle || 'Untitled'
-                            }
-                        }
-                    ]
-                }
+                                content: pageTitle ?? 'Untitled',
+                            },
+                        },
+                    ],
+                },
             };
 
             // Ensure database has required properties if metadata is provided
-            if (options.metadata && Object.keys(options.metadata).length > 0) {
+            if (options.metadata !== undefined && Object.keys(options.metadata).length > 0) {
                 await this.ensureDatabaseProperties(databaseId);
             }
 
             // Smart property setting for all metadata
-            if (options.metadata) {
+            if (options.metadata !== undefined) {
                 // Handle description
-                if (options.metadata.description) {
+                if (options.metadata.description !== undefined) {
                     await this.setPropertyValue(
-                        properties, 
-                        'Description', 
-                        options.metadata.description, 
-                        databaseId
+                        properties,
+                        'Description',
+                        options.metadata.description,
+                        databaseId,
                     );
                 }
 
                 // Handle category with smart detection
-                if (options.metadata.category) {
+                if (options.metadata.category !== undefined) {
                     await this.setPropertyValue(
-                        properties, 
-                        'Category', 
-                        options.metadata.category, 
-                        databaseId
+                        properties,
+                        'Category',
+                        options.metadata.category,
+                        databaseId,
                     );
                 }
 
                 // Handle tags
-                if (options.metadata.tags && Array.isArray(options.metadata.tags)) {
+                if (options.metadata.tags !== undefined && Array.isArray(options.metadata.tags)) {
                     await this.setPropertyValue(
-                        properties, 
-                        'Tags', 
-                        options.metadata.tags, 
-                        databaseId
+                        properties,
+                        'Tags',
+                        options.metadata.tags,
+                        databaseId,
                     );
                 }
 
                 // Handle status
-                if (options.metadata.status) {
+                if (options.metadata.status !== undefined) {
                     await this.setPropertyValue(
-                        properties, 
-                        'Status', 
-                        options.metadata.status, 
-                        databaseId
+                        properties,
+                        'Status',
+                        options.metadata.status,
+                        databaseId,
                     );
                 }
             }
@@ -538,58 +534,58 @@ export class NotionService {
                 try {
                     page = await this.createPage({
                         parent: { type: 'database_id' as const, database_id: databaseId },
-                        properties
+                        properties,
                     });
                     createdPageId = page.id;
                     break; // Success, exit loop
-                } catch (error: any) {
+                } catch (error: unknown) {
                     if (
-                        retryCount < maxRetries && 
+                        retryCount < maxRetries &&
+                        error instanceof Error &&
                         error.message?.includes('is expected to be')
                     ) {
-                        console.log('Property type mismatch detected, clearing cache and retrying...');
-                        // Clear cache to force re-detection
+                        // Property type mismatch detected, clearing cache and retrying
                         this.propertyTypeCache.delete(databaseId);
                         retryCount++;
-                        
+
                         // Rebuild properties with fresh type detection
                         properties = {
                             [titlePropertyName]: {
-                                type: "title",
+                                type: 'title',
                                 title: [
                                     {
-                                        type: "text",
+                                        type: 'text',
                                         text: {
-                                            content: pageTitle || 'Untitled'
-                                        }
-                                    }
-                                ]
-                            }
+                                            content: pageTitle ?? 'Untitled',
+                                        },
+                                    },
+                                ],
+                            },
                         };
 
                         // Re-apply metadata with fresh detection
-                        if (options.metadata) {
-                            if (options.metadata.description) {
+                        if (options.metadata !== undefined) {
+                            if (options.metadata.description !== undefined) {
                                 await this.setPropertyValue(properties, 'Description', options.metadata.description, databaseId);
                             }
-                            if (options.metadata.category) {
+                            if (options.metadata.category !== undefined) {
                                 await this.setPropertyValue(properties, 'Category', options.metadata.category, databaseId);
                             }
-                            if (options.metadata.tags && Array.isArray(options.metadata.tags)) {
+                            if (options.metadata.tags !== undefined && Array.isArray(options.metadata.tags)) {
                                 await this.setPropertyValue(properties, 'Tags', options.metadata.tags, databaseId);
                             }
-                            if (options.metadata.status) {
+                            if (options.metadata.status !== undefined) {
                                 await this.setPropertyValue(properties, 'Status', options.metadata.status, databaseId);
                             }
                         }
                     } else {
                         // If we created a page but failed, clean it up
-                        if (createdPageId) {
+                        if (createdPageId !== null) {
                             try {
                                 await this.archivePage(createdPageId);
-                                console.log('Cleaned up failed page creation:', createdPageId);
-                            } catch (cleanupError) {
-                                console.error('Failed to cleanup page:', cleanupError);
+                                // Page cleanup completed
+                            } catch {
+                                // Cleanup failed, but original error is more important
                             }
                         }
                         throw error; // Re-throw if not a type mismatch or max retries reached
@@ -604,23 +600,20 @@ export class NotionService {
                 }
             } catch (error) {
                 // If block addition fails, clean up the page
-                if (page!) {
-                    try {
-                        await this.archivePage(page!.id);
-                        console.log('Cleaned up page after block addition failed:', page!.id);
-                    } catch (cleanupError) {
-                        console.error('Failed to cleanup page:', cleanupError);
-                    }
+                try {
+                    await this.archivePage(page!.id);
+                    // Page cleanup completed after block addition failed
+                } catch {
+                    // Cleanup failed, but original error is more important
                 }
                 throw error;
             }
 
-            console.log(`✅ Page created successfully with smart property detection`);
-            console.log(`   Property types detected:`, Array.from(this.propertyTypeCache.get(databaseId)?.entries() || []));
+            // Page created successfully with smart property detection
 
             return { page: page!, conversionResult };
         } catch (error) {
-            throw new Error(`Failed to create page from markdown: ${error}`);
+            throw new Error(`Failed to create page from markdown: ${String(error)}`);
         }
     }
 
@@ -629,7 +622,7 @@ export class NotionService {
  */
     async exportPageToMarkdown(
         pageId: string,
-        options: Partial<ConversionOptions> = {}
+        options: Partial<ConversionOptions> = {},
     ): Promise<{ markdown: string; page: NotionPage; conversionResult: ConversionResult }> {
         try {
             // Get the page details
@@ -639,12 +632,12 @@ export class NotionService {
             const blocks = await this.getAllBlocksRecursivelyParallel(pageId, 8);
 
             // Convert to markdown using utility function
-            const conversionResult = await notionToMarkdown(blocks, options);
+            const conversionResult = notionToMarkdown(blocks, options);
             const markdown = conversionResult.content as string;
 
             return { markdown, page, conversionResult };
         } catch (error) {
-            throw new Error(`Failed to export page to markdown: ${error}`);
+            throw new Error(`Failed to export page to markdown: ${String(error)}`);
         }
     }
 
@@ -658,43 +651,43 @@ export class NotionService {
             tags?: string[];
             description?: string;
             status?: string;
-        }
+        },
     ): Promise<NotionPage> {
         try {
             // Build update properties
-            const properties: any = {};
+            const properties: Record<string, unknown> = {};
 
-            if (metadata.category) {
+            if (metadata.category !== undefined) {
                 properties.Category = {
-                    select: { name: metadata.category }
+                    select: { name: metadata.category },
                 };
             }
 
-            if (metadata.tags) {
+            if (metadata.tags !== undefined) {
                 properties.Tags = {
-                    multi_select: metadata.tags.map(tag => ({ name: tag }))
+                    multi_select: metadata.tags.map(tag => ({ name: tag })),
                 };
             }
 
-            if (metadata.description) {
+            if (metadata.description !== undefined) {
                 properties.Description = {
                     rich_text: [
                         {
-                            text: { content: metadata.description }
-                        }
-                    ]
+                            text: { content: metadata.description },
+                        },
+                    ],
                 };
             }
 
-            if (metadata.status) {
+            if (metadata.status !== undefined) {
                 properties.Status = {
-                    select: { name: metadata.status }
+                    select: { name: metadata.status },
                 };
             }
 
             return await this.updatePage(pageId, { properties });
         } catch (error) {
-            throw new Error(`Failed to update page metadata: ${error}`);
+            throw new Error(`Failed to update page metadata: ${String(error)}`);
         }
     }
 
@@ -707,21 +700,21 @@ export class NotionService {
             markdown?: string;
             filePath?: string;
             conversionOptions?: Partial<ConversionOptions>;
-        }
+        },
     ): Promise<{ conversionResult: ConversionResult; newPageId: string }> {
         try {
             // Get markdown content
             let markdown: string;
 
-            if (!options.markdown && !options.filePath) {
+            if (options.markdown === undefined && options.filePath === undefined) {
                 throw new Error('Either markdown content or filePath must be provided');
             }
 
-            if (options.markdown && options.filePath) {
+            if (options.markdown !== undefined && options.filePath !== undefined) {
                 throw new Error('Provide either markdown content or filePath, not both');
             }
 
-            if (options.filePath) {
+            if (options.filePath !== undefined) {
                 if (!validateFilePath(options.filePath) || !options.filePath.endsWith('.md')) {
                     throw new Error(`Invalid file path: ${options.filePath}. Must be a .md file with valid path.`);
                 }
@@ -735,7 +728,7 @@ export class NotionService {
 
             // Extract current metadata
             const properties = currentPage.properties;
-            const pageTitle = extractPageTitle(currentPage);
+            const _pageTitle = extractPageTitle(currentPage);
 
             // Get parent database
             const parent = currentPage.parent;
@@ -744,13 +737,13 @@ export class NotionService {
             }
 
             // Convert markdown to blocks
-            const conversionResult = await markdownToNotion(markdown, options.conversionOptions);
+            const conversionResult = markdownToNotion(markdown, options.conversionOptions);
             const blocks = conversionResult.content as NotionBlockData[];
 
             // Create new page with same properties
             const newPage = await this.createPage({
                 parent: { type: 'database_id' as const, database_id: parent.database_id },
-                properties: properties
+                properties: properties,
             });
 
             // Add blocks to new page using chunked method for large documents
@@ -763,7 +756,7 @@ export class NotionService {
 
             return { conversionResult, newPageId: newPage.id };
         } catch (error) {
-            throw new Error(`Failed to update page content: ${error}`);
+            throw new Error(`Failed to update page content: ${String(error)}`);
         }
     }
 
@@ -781,7 +774,7 @@ export class NotionService {
             sortBy?: 'title' | 'last_edited' | 'created' | 'category' | 'status';
             sortOrder?: 'ascending' | 'descending';
             startCursor?: string;
-        } = {}
+        } = {},
     ): Promise<NotionDatabaseQueryResults> {
         try {
             const {
@@ -792,52 +785,52 @@ export class NotionService {
                 status,
                 sortBy = 'last_edited',
                 sortOrder = 'descending',
-                startCursor
+                startCursor,
             } = options;
 
             // Get the title property name for this database
             const titlePropertyName = await this.getTitlePropertyName(databaseId);
 
             // Build filter conditions
-            const filters: any[] = [];
+            const filters: Record<string, unknown>[] = [];
 
             // Text search across title and description
-            if (search) {
+            if (search !== undefined) {
                 filters.push({
                     or: [
                         {
                             property: titlePropertyName,
                             title: {
-                                contains: search
-                            }
+                                contains: search,
+                            },
                         },
                         {
                             property: 'Description',
                             rich_text: {
-                                contains: search
-                            }
-                        }
-                    ]
+                                contains: search,
+                            },
+                        },
+                    ],
                 });
             }
 
             // Category filter
-            if (category) {
+            if (category !== undefined) {
                 filters.push({
                     property: 'Category',
                     select: {
-                        equals: category
-                    }
+                        equals: category,
+                    },
                 });
             }
 
             // Status filter
-            if (status) {
+            if (status !== undefined) {
                 filters.push({
                     property: 'Status',
                     select: {
-                        equals: status
-                    }
+                        equals: status,
+                    },
                 });
             }
 
@@ -847,8 +840,8 @@ export class NotionService {
                     filters.push({
                         property: 'Tags',
                         multi_select: {
-                            contains: tags[0]
-                        }
+                            contains: tags[0],
+                        },
                     });
                 } else {
                     // Multiple tags - find pages that contain any of these tags
@@ -856,15 +849,15 @@ export class NotionService {
                         or: tags.map(tag => ({
                             property: 'Tags',
                             multi_select: {
-                                contains: tag
-                            }
-                        }))
+                                contains: tag,
+                            },
+                        })),
                     });
                 }
             }
 
             // Build final filter
-            let filter: any = undefined;
+            let filter: Record<string, unknown> | undefined = undefined;
             if (filters.length === 1) {
                 filter = filters[0];
             } else if (filters.length > 1) {
@@ -872,44 +865,48 @@ export class NotionService {
             }
 
             // Build sort configuration
-            const sorts: any[] = [];
+            const sorts: {
+                property?: string;
+                direction: 'ascending' | 'descending';
+                timestamp?: 'created_time' | 'last_edited_time';
+            }[] = [];
 
             switch (sortBy) {
                 case 'title':
                     sorts.push({
                         property: titlePropertyName,
-                        direction: sortOrder
+                        direction: sortOrder,
                     });
                     break;
                 case 'category':
                     sorts.push({
                         property: 'Category',
-                        direction: sortOrder
+                        direction: sortOrder,
                     });
                     break;
                 case 'status':
                     sorts.push({
                         property: 'Status',
-                        direction: sortOrder
+                        direction: sortOrder,
                     });
                     break;
                 case 'created':
                     sorts.push({
                         timestamp: 'created_time',
-                        direction: sortOrder
+                        direction: sortOrder,
                     });
                     break;
                 case 'last_edited':
                 default:
                     sorts.push({
                         timestamp: 'last_edited_time',
-                        direction: sortOrder
+                        direction: sortOrder,
                     });
                     break;
             }
 
             // Execute query
-            const queryRequest: any = {
+            const queryRequest: DatabaseQueryRequest = {
                 database_id: databaseId,
                 page_size: Math.min(limit, 100), // Notion API max is 100
             };
@@ -922,13 +919,13 @@ export class NotionService {
                 queryRequest.sorts = sorts;
             }
 
-            if (startCursor) {
+            if (startCursor !== undefined) {
                 queryRequest.start_cursor = startCursor;
             }
 
             return await this.queryDatabase(queryRequest);
         } catch (error) {
-            throw new Error(`Failed to query database pages: ${error}`);
+            throw new Error(`Failed to query database pages: ${String(error)}`);
         }
     }
 
@@ -942,15 +939,15 @@ export class NotionService {
 
             // Find the property with type "title"
             for (const [propertyName, property] of Object.entries(properties)) {
-                if ((property as any).type === 'title') {
+                if ((property as { type: string }).type === 'title') {
                     return propertyName;
                 }
             }
 
             // Fallback to common names if no title property found
             return 'title';
-        } catch (error) {
-            console.warn('Warning: Could not determine title property name:', error);
+        } catch {
+            // Could not determine title property name, using fallback
             return 'title';
         }
     }
@@ -962,11 +959,11 @@ export class NotionService {
         try {
             const database = await this.getDatabase(databaseId);
             const existingProperties = database.properties;
-            const propertiesToCreate: any = {};
+            const propertiesToCreate: Record<string, unknown> = {};
 
             // Helper to check if property exists with correct type
             const needsProperty = (name: string, expectedType: string): boolean => {
-                return !existingProperties[name] || existingProperties[name].type !== expectedType;
+                return existingProperties[name] === undefined || (existingProperties[name] as { type: string }).type !== expectedType;
             };
 
             // Only add properties that don't exist or have wrong type
@@ -985,31 +982,25 @@ export class NotionService {
                             { name: 'published', color: 'green' },
                             { name: 'draft', color: 'yellow' },
                             { name: 'archived', color: 'gray' },
-                            { name: 'review', color: 'blue' }
-                        ]
-                    }
+                            { name: 'review', color: 'blue' },
+                        ],
+                    },
                 };
             }
 
             // Don't create Category - respect existing configuration
-            if (!existingProperties['Category']) {
-                console.log('Note: Category property not found in database. Consider adding it manually as select or multi_select.');
-            } else {
-                console.log(`Category property exists as type: ${existingProperties['Category'].type}`);
-            }
+            // Category property handling is done through smart detection
 
             // Only update if there are properties to add
             if (Object.keys(propertiesToCreate).length > 0) {
                 await this.updateDatabase(databaseId, {
-                    properties: propertiesToCreate
+                    properties: propertiesToCreate,
                 });
-                console.log('Updated database properties:', Object.keys(propertiesToCreate));
+                // Database properties updated successfully
             }
-        } catch (error) {
-            console.error('Failed to ensure database properties:', error);
-            // Don't throw - continue with existing schema
+        } catch {
+            // Failed to ensure database properties, continue with existing schema
         }
     }
 
-
-} 
+}

@@ -9,8 +9,7 @@ import { notionBlocksToMarkdown } from './notion-to-markdown.js';
 import {
     ConversionOptions,
     ConversionResult,
-    MarkdownDocument,
-    DEFAULT_CONVERSION_OPTIONS
+    DEFAULT_CONVERSION_OPTIONS,
 } from '../types/markdown.js';
 import { NotionBlock } from '../types/notion.js';
 import { NotionBlockData } from './notion-blocks.js';
@@ -18,19 +17,19 @@ import { NotionBlockData } from './notion-blocks.js';
 /**
  * Convert markdown content to Notion blocks
  */
-export async function markdownToNotion(
+export function markdownToNotion(
     markdown: string,
-    options: Partial<ConversionOptions> = {}
-): Promise<ConversionResult> {
+    options: Partial<ConversionOptions> = {},
+): ConversionResult {
     try {
         const conversionOptions = {
             ...DEFAULT_CONVERSION_OPTIONS,
-            ...options
+            ...options,
         };
 
         const parser = new MarkdownParser({
             extractMetadata: true,
-            validateSyntax: true
+            validateSyntax: true,
         });
 
         // Parse markdown to AST
@@ -41,28 +40,28 @@ export async function markdownToNotion(
 
         return result;
     } catch (error) {
-        throw new Error(`Markdown to Notion conversion failed: ${error}`);
+        throw new Error(`Markdown to Notion conversion failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
 /**
  * Convert Notion blocks to markdown
  */
-export async function notionToMarkdown(
+export function notionToMarkdown(
     blocks: (NotionBlock | NotionBlockData)[],
-    options: Partial<ConversionOptions> = {}
-): Promise<ConversionResult> {
+    options: Partial<ConversionOptions> = {},
+): ConversionResult {
     try {
         const conversionOptions = {
             ...DEFAULT_CONVERSION_OPTIONS,
-            ...options
+            ...options,
         };
 
         const result = notionBlocksToMarkdown(blocks, conversionOptions);
 
         return result;
     } catch (error) {
-        throw new Error(`Notion to Markdown conversion failed: ${error}`);
+        throw new Error(`Notion to Markdown conversion failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 
@@ -76,34 +75,33 @@ export async function notionToMarkdown(
 export function extractTitleFromMarkdown(markdown: string): string | null {
     const parser = new MarkdownParser({
         extractMetadata: true,
-        validateSyntax: true
+        validateSyntax: true,
     });
 
     const doc = parser.parseDocument(markdown, 'temp.md');
-    return doc.metadata.title || null;
+    return doc.metadata.title ?? null;
 }
 
 /**
  * Extract page title from Notion page properties
  */
-export function extractPageTitle(page: any): string {
-    const properties = page.properties || {};
+export function extractPageTitle(page: { properties?: Record<string, unknown> }): string {
+    const properties = page.properties ?? {};
 
     // Find the property with type "title"
-    for (const [propertyName, property] of Object.entries(properties)) {
-        if ((property as any).type === 'title') {
-            const titleContent = (property as any).title?.[0]?.text?.content;
-            if (titleContent) {
+    for (const [_propertyName, property] of Object.entries(properties)) {
+        const typedProperty = property as { type?: string; title?: Array<{ text?: { content?: string } }> };
+        if (typedProperty?.type === 'title') {
+            const titleContent = typedProperty.title?.[0]?.text?.content;
+            if (titleContent !== null && titleContent !== undefined && titleContent.length > 0) {
                 return titleContent;
             }
         }
     }
 
     // Fallback to common property names
-    return properties.title?.title?.[0]?.text?.content ||
-        properties.Title?.title?.[0]?.text?.content ||
-        properties.Name?.title?.[0]?.text?.content ||
-        'Untitled';
+    const titleProperty = (properties.title ?? properties.Title ?? properties.Name) as { title?: Array<{ text?: { content?: string } }> } | undefined;
+    return titleProperty?.title?.[0]?.text?.content ?? 'Untitled';
 }
 
 /**
@@ -113,10 +111,10 @@ export function validateMarkdown(content: string): { isValid: boolean; errors: s
     try {
         const parser = new MarkdownParser({
             extractMetadata: true,
-            validateSyntax: true
+            validateSyntax: true,
         });
 
-        const document = parser.parseDocument(content, 'temp.md');
+        const _document = parser.parseDocument(content, 'temp.md');
 
         const errors: string[] = [];
         const warnings: string[] = [];
@@ -133,13 +131,13 @@ export function validateMarkdown(content: string): { isValid: boolean; errors: s
         return {
             isValid: errors.length === 0,
             errors,
-            warnings
+            warnings,
         };
     } catch (error) {
         return {
             isValid: false,
             errors: [`Parsing failed: ${error instanceof Error ? error.message : String(error)}`],
-            warnings: []
+            warnings: [],
         };
     }
 }
@@ -150,11 +148,11 @@ export function validateMarkdown(content: string): { isValid: boolean; errors: s
 export function extractHeadings(markdown: string): Array<{ level: number; text: string; anchor: string }> {
     const parser = new MarkdownParser({
         extractMetadata: true,
-        validateSyntax: true
+        validateSyntax: true,
     });
 
     const doc = parser.parseDocument(markdown, 'temp.md');
-    return (doc.metadata.headings || []).map(h => ({ ...h, anchor: h.anchor || '' }));
+    return (doc.metadata.headings ?? []).map(h => ({ ...h, anchor: h.anchor ?? '' }));
 }
 
 /**
@@ -162,7 +160,7 @@ export function extractHeadings(markdown: string): Array<{ level: number; text: 
  */
 export function getWordCount(markdown: string): number {
     return markdown
-        .replace(/[#*`_\[\]()]/g, '') // Remove markdown syntax
+        .replace(/[#*`_[\]()]/g, '') // Remove markdown syntax
         .split(/\s+/)
         .filter(word => word.length > 0).length;
 }
@@ -184,28 +182,32 @@ export function removeFrontmatter(markdown: string): string {
 /**
  * Extract frontmatter as object
  */
-export function extractFrontmatter(markdown: string): Record<string, any> {
+export function extractFrontmatter(markdown: string): Record<string, string | string[]> {
     const frontMatterMatch = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
 
     if (!frontMatterMatch) {
         return {};
     }
 
-    const frontMatter: Record<string, any> = {};
+    const frontMatter: Record<string, string | string[]> = {};
     const yamlContent = frontMatterMatch[1];
 
-    yamlContent.split('\n').forEach(line => {
-        const match = line.match(/^(\w+):\s*(.+)$/);
-        if (match) {
-            const [, key, value] = match;
-            // Handle arrays (simple case)
-            if (value.startsWith('[') && value.endsWith(']')) {
-                frontMatter[key] = value.slice(1, -1).split(',').map(s => s.trim().replace(/['"]/g, ''));
-            } else {
-                frontMatter[key] = value.replace(/['"]/g, '');
+    if (yamlContent) {
+        yamlContent.split('\n').forEach(line => {
+            const match = line.match(/^(\w+):\s*(.+)$/);
+            if (match) {
+                const [, key, value] = match;
+                if (key && value) {
+                    // Handle arrays (simple case)
+                    if (value.startsWith('[') && value.endsWith(']')) {
+                        frontMatter[key] = value.slice(1, -1).split(',').map(s => s.trim().replace(/['"]/g, ''));
+                    } else {
+                        frontMatter[key] = value.replace(/['"]/g, '');
+                    }
+                }
             }
-        }
-    });
+        });
+    }
 
     return frontMatter;
-} 
+}

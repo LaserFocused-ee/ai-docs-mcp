@@ -2,28 +2,24 @@
  * Markdown to Notion conversion engine
  */
 
-import { MarkdownNode, ConversionOptions, ConversionResult, ConversionMetadata, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS } from '../types/markdown.js';
+import { ConversionMetadata, ConversionOptions, ConversionResult, ConversionStatistics, DEFAULT_CONVERSION_OPTIONS, MarkdownNode } from '../types/markdown.js';
 
 // Notion API limits
 const NOTION_CODE_BLOCK_MAX_CHARACTERS = 2000;
 import {
     NotionBlockData,
-    createRichText,
-    createRichTextFromNodes,
-    buildParagraphBlock,
-    buildHeadingBlock,
     buildBulletedListItemBlock,
-    buildNumberedListItemBlock,
-    buildToDoBlock,
     buildCodeBlock,
-    buildQuoteBlock,
     buildDividerBlock,
-    buildImageBlock,
-    buildTableBlock,
-    buildTableBlockFromNodes,
-    buildCalloutBlock,
     buildFallbackBlock,
-    normalizeHeadingLevel
+    buildHeadingBlock,
+    buildImageBlock,
+    buildNumberedListItemBlock,
+    buildParagraphBlock,
+    buildQuoteBlock,
+    buildTableBlockFromNodes,
+    buildToDoBlock,
+    normalizeHeadingLevel,
 } from './notion-blocks.js';
 
 /**
@@ -31,7 +27,7 @@ import {
  */
 export function markdownASTToNotionBlocks(
     ast: MarkdownNode[],
-    options: Partial<ConversionOptions> = {}
+    options: Partial<ConversionOptions> = {},
 ): ConversionResult {
     const config = { ...DEFAULT_CONVERSION_OPTIONS, ...options };
     const startTime = Date.now();
@@ -62,7 +58,7 @@ export function markdownASTToNotionBlocks(
             toolVersion: '1.0.0',
             options: config,
             processingTime,
-            nodeCount: totalBlocks
+            nodeCount: totalBlocks,
         };
 
         const statistics: ConversionStatistics = {
@@ -70,8 +66,8 @@ export function markdownASTToNotionBlocks(
             convertedBlocks,
             skippedBlocks,
             errorBlocks,
-            unsupportedBlocks: [...new Set(unsupportedBlocks)], // Remove duplicates
-            warnings
+            unsupportedBlocks: Array.from(new Set(unsupportedBlocks)), // Remove duplicates
+            warnings,
         };
 
         return {
@@ -79,10 +75,10 @@ export function markdownASTToNotionBlocks(
             warnings,
             errors,
             metadata,
-            statistics
+            statistics,
         };
     } catch (error) {
-        errors.push(`Conversion failed: ${error}`);
+        errors.push(`Conversion failed: ${error instanceof Error ? error.message : String(error)}`);
         errorBlocks = totalBlocks;
 
         return {
@@ -96,16 +92,16 @@ export function markdownASTToNotionBlocks(
                 toolVersion: '1.0.0',
                 options: config,
                 processingTime: Date.now() - startTime,
-                nodeCount: totalBlocks
+                nodeCount: totalBlocks,
             },
             statistics: {
                 totalBlocks,
                 convertedBlocks: 0,
                 skippedBlocks: 0,
                 errorBlocks,
-                unsupportedBlocks: [...new Set(unsupportedBlocks)],
-                warnings
-            }
+                unsupportedBlocks: Array.from(new Set(unsupportedBlocks)),
+                warnings,
+            },
         };
     }
 }
@@ -118,7 +114,7 @@ function convertNodeArray(
     options: ConversionOptions,
     warnings: string[],
     errors: string[],
-    unsupportedBlocks: string[]
+    unsupportedBlocks: string[],
 ): NotionBlockData[] {
     const blocks: NotionBlockData[] = [];
 
@@ -127,15 +123,15 @@ function convertNodeArray(
             const convertedBlocks = convertMarkdownNode(node, options, warnings, errors, unsupportedBlocks);
             blocks.push(...convertedBlocks);
         } catch (error) {
-            errors.push(`Error converting node ${node.type}: ${error}`);
+            errors.push(`Error converting node ${node.type}: ${error instanceof Error ? error.message : String(error)}`);
 
             if (options.handleUnsupportedBlocks === 'convert') {
                 blocks.push(buildFallbackBlock(
-                    node.content || 'Error converting content',
-                    node.type
+                    node.content ?? 'Error converting content',
+                    node.type,
                 ));
             } else if (options.handleUnsupportedBlocks === 'error') {
-                throw new Error(`Failed to convert ${node.type}: ${error}`);
+                throw new Error(`Failed to convert ${node.type}: ${error instanceof Error ? error.message : String(error)}`);
             }
             // 'ignore' option skips the block
         }
@@ -152,7 +148,7 @@ function convertMarkdownNode(
     options: ConversionOptions,
     warnings: string[],
     errors: string[],
-    unsupportedBlocks: string[]
+    unsupportedBlocks: string[],
 ): NotionBlockData[] {
     switch (node.type) {
         case 'heading':
@@ -188,8 +184,8 @@ function convertMarkdownNode(
 
             if (options.handleUnsupportedBlocks === 'convert') {
                 return [buildFallbackBlock(
-                    node.content || 'Unsupported content',
-                    node.type
+                    node.content ?? 'Unsupported content',
+                    node.type,
                 )];
             } else if (options.handleUnsupportedBlocks === 'error') {
                 throw new Error(`Unsupported block type: ${node.type}`);
@@ -205,16 +201,16 @@ function convertMarkdownNode(
 function convertHeading(
     node: MarkdownNode,
     options: ConversionOptions,
-    warnings: string[]
+    _warnings: string[],
 ): NotionBlockData[] {
-    const level = node.level || 1;
+    const level = node.level ?? 1;
 
     // Silently normalize heading levels to Notion's supported range (H1-H3)
     const notionLevel = normalizeHeadingLevel(Math.min(level, options.maxHeadingLevel));
 
     return [buildHeadingBlock(
-        node.children || node.content || '',
-        notionLevel
+        node.children ?? node.content ?? '',
+        notionLevel,
     )];
 }
 
@@ -223,12 +219,12 @@ function convertHeading(
  */
 function convertParagraph(
     node: MarkdownNode,
-    options: ConversionOptions
+    options: ConversionOptions,
 ): NotionBlockData[] {
-    const content = node.children || node.content || '';
+    const content = node.children ?? node.content ?? '';
 
     // Skip empty paragraphs unless explicitly preserving formatting
-    if (!content && !options.preserveFormatting) {
+    if ((content === '' || content === null || content === undefined) && !options.preserveFormatting) {
         return [];
     }
 
@@ -259,7 +255,7 @@ function convertList(
     options: ConversionOptions,
     warnings: string[],
     errors: string[],
-    unsupportedBlocks: string[]
+    unsupportedBlocks: string[],
 ): NotionBlockData[] {
     if (!node.children) {
         warnings.push('List node has no children');
@@ -276,7 +272,7 @@ function convertList(
                 warnings,
                 errors,
                 unsupportedBlocks,
-                node.ordered ? 'numbered' : 'bulleted'
+                node.ordered === true ? 'numbered' : 'bulleted',
             );
             blocks.push(...childBlocks);
         } else {
@@ -296,15 +292,15 @@ function convertListItem(
     warnings: string[],
     errors: string[],
     unsupportedBlocks: string[],
-    listType?: 'bulleted' | 'numbered'
+    listType?: 'bulleted' | 'numbered',
 ): NotionBlockData[] {
     // Extract text content from children if available, otherwise use direct content
     let content: string | MarkdownNode[] = '';
 
-    if (node.children && Array.isArray(node.children)) {
+    if (node.children !== null && node.children !== undefined && Array.isArray(node.children)) {
         // Check if first child is a paragraph containing the text content
         const firstChild = node.children[0];
-        if (firstChild && firstChild.type === 'paragraph' && firstChild.children) {
+        if (firstChild !== null && firstChild !== undefined && firstChild.type === 'paragraph' && firstChild.children !== null && firstChild.children !== undefined) {
             content = firstChild.children; // Use the paragraph's children for rich text
         } else {
             // Extract text content from all text nodes
@@ -312,15 +308,15 @@ function convertListItem(
             if (textNodes.length > 0) {
                 content = textNodes;
             } else {
-                content = node.content || '';
+                content = node.content ?? '';
             }
         }
     } else {
-        content = node.content || '';
+        content = node.content ?? '';
     }
 
     // Determine list type
-    let type: 'bulleted' | 'numbered' | 'todo' = listType || 'bulleted';
+    let type: 'bulleted' | 'numbered' | 'todo' = listType ?? 'bulleted';
 
     // Check if it's a task list item
     if (node.checked !== undefined) {
@@ -350,7 +346,7 @@ function convertListItem(
         case 'numbered':
             return [buildNumberedListItemBlock(content, childBlocks)];
         case 'todo':
-            return [buildToDoBlock(content, node.checked || false, childBlocks)];
+            return [buildToDoBlock(content, node.checked ?? false, childBlocks)];
         default:
             return [buildBulletedListItemBlock(content, childBlocks)];
     }
@@ -362,13 +358,13 @@ function convertListItem(
 function convertCodeBlock(
     node: MarkdownNode,
     options: ConversionOptions,
-    errors: string[]
+    errors: string[],
 ): NotionBlockData[] {
-    const content = node.content || '';
+    const content = node.content ?? '';
 
     // Validate code block length against Notion's limit
     if (content.length > NOTION_CODE_BLOCK_MAX_CHARACTERS) {
-        const error = `Code block exceeds Notion's ${NOTION_CODE_BLOCK_MAX_CHARACTERS} character limit: ${content.length} characters found. Language: ${node.language || 'none'}`;
+        const error = `Code block exceeds Notion's ${NOTION_CODE_BLOCK_MAX_CHARACTERS} character limit: ${content.length} characters found. Language: ${node.language ?? 'none'}`;
         errors.push(error);
         throw new Error(error);
     }
@@ -376,7 +372,7 @@ function convertCodeBlock(
     return [buildCodeBlock(
         content,
         node.language,
-        undefined // caption - could be extracted from title or alt
+        undefined, // caption - could be extracted from title or alt
     )];
 }
 
@@ -388,9 +384,9 @@ function convertQuote(
     options: ConversionOptions,
     warnings: string[],
     errors: string[],
-    unsupportedBlocks: string[]
+    unsupportedBlocks: string[],
 ): NotionBlockData[] {
-    const content = node.children || node.content || '';
+    const content = node.children ?? node.content ?? '';
 
     // Convert nested children
     let childBlocks: NotionBlockData[] = [];
@@ -407,7 +403,7 @@ function convertQuote(
 function convertTable(
     node: MarkdownNode,
     options: ConversionOptions,
-    warnings: string[]
+    warnings: string[],
 ): NotionBlockData[] {
     if (!node.children) {
         warnings.push('Table node has no children');
@@ -427,13 +423,13 @@ function convertTable(
                         row.push({
                             type: 'table_cell',
                             children: cellNode.children,
-                            content: cellNode.content || ''
+                            content: cellNode.content ?? '',
                         });
                     } else {
                         row.push({
                             type: 'table_cell',
-                            content: cellNode.content || '',
-                            children: []
+                            content: cellNode.content ?? '',
+                            children: [],
                         });
                     }
                 }
@@ -459,9 +455,9 @@ function convertTable(
 function convertImage(
     node: MarkdownNode,
     options: ConversionOptions,
-    warnings: string[]
+    warnings: string[],
 ): NotionBlockData[] {
-    if (!node.url) {
+    if (node.url === null || node.url === undefined || node.url === '') {
         warnings.push('Image node missing URL');
         return [];
     }
@@ -469,7 +465,7 @@ function convertImage(
     let imageUrl = node.url;
 
     // Handle relative URLs
-    if (!imageUrl.startsWith('http') && options.imageBaseUrl) {
+    if (!imageUrl.startsWith('http') && options.imageBaseUrl !== null && options.imageBaseUrl !== undefined && options.imageBaseUrl !== '') {
         imageUrl = `${options.imageBaseUrl.replace(/\/$/, '')}/${imageUrl.replace(/^\//, '')}`;
     }
 
@@ -479,7 +475,7 @@ function convertImage(
             return [];
         case 'upload':
             warnings.push('Image upload not implemented, using link');
-        // Fall through to link handling
+            return [buildImageBlock(imageUrl, node.alt)];
         case 'link':
         default:
             return [buildImageBlock(imageUrl, node.alt)];
@@ -500,4 +496,4 @@ function countBlocks(nodes: MarkdownNode[]): number {
     }
 
     return count;
-} 
+}

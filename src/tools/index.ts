@@ -3,4 +3,4 @@
  */
 
 export * from './guru.js';
-export * from './notion.js'; 
+export * from './notion.js';
