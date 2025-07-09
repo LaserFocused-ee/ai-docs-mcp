@@ -6,7 +6,7 @@ import { remark } from 'remark';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
-import { default as matter } from 'gray-matter';
+import matter from 'gray-matter';
 import type { Content } from 'mdast';
 
 import {
