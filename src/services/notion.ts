@@ -25,9 +25,91 @@ import path from 'path';
 export class NotionService {
     private config: NotionConfig;
     private baseUrl = 'https://api.notion.com/v1';
+    private propertyTypeCache: Map<string, Map<string, string>> = new Map();
 
     constructor(config: NotionConfig) {
         this.config = config;
+    }
+
+    private async getPropertyType(databaseId: string, propertyName: string): Promise<string | null> {
+        // Check cache first
+        const dbCache = this.propertyTypeCache.get(databaseId);
+        if (dbCache?.has(propertyName)) {
+            return dbCache.get(propertyName) || null;
+        }
+
+        try {
+            const database = await this.getDatabase(databaseId);
+            const propertyType = database.properties[propertyName]?.type || null;
+            
+            // Cache the result
+            if (!this.propertyTypeCache.has(databaseId)) {
+                this.propertyTypeCache.set(databaseId, new Map());
+            }
+            this.propertyTypeCache.get(databaseId)!.set(propertyName, propertyType || '');
+            
+            return propertyType;
+        } catch (error) {
+            console.error(`Failed to get property type for ${propertyName}:`, error);
+            return null;
+        }
+    }
+
+    private async setPropertyValue(
+        properties: any, 
+        propertyName: string, 
+        value: any, 
+        databaseId: string
+    ): Promise<void> {
+        const propertyType = await this.getPropertyType(databaseId, propertyName);
+        
+        if (!propertyType) {
+            console.warn(`Property ${propertyName} not found in database schema`);
+            return;
+        }
+
+        console.log(`Setting ${propertyName} as ${propertyType} with value:`, value);
+
+        switch (propertyType) {
+            case 'select':
+                properties[propertyName] = { select: { name: String(value) } };
+                break;
+                
+            case 'multi_select':
+                properties[propertyName] = { 
+                    multi_select: Array.isArray(value) 
+                        ? value.map(v => ({ name: String(v) }))
+                        : [{ name: String(value) }]
+                };
+                break;
+                
+            case 'title':
+                properties[propertyName] = { 
+                    title: [{ text: { content: String(value) } }] 
+                };
+                break;
+                
+            case 'rich_text':
+                properties[propertyName] = { 
+                    rich_text: [{ text: { content: String(value) } }] 
+                };
+                break;
+                
+            case 'checkbox':
+                properties[propertyName] = { checkbox: Boolean(value) };
+                break;
+                
+            case 'number':
+                properties[propertyName] = { number: Number(value) };
+                break;
+                
+            case 'url':
+                properties[propertyName] = { url: String(value) };
+                break;
+                
+            default:
+                console.warn(`Unsupported property type ${propertyType} for ${propertyName}`);
+        }
     }
 
     private async makeRequest<T>(
@@ -384,7 +466,7 @@ export class NotionService {
             const titlePropertyName = await this.getTitlePropertyName(databaseId);
 
             // Build page properties
-            const properties: any = {
+            let properties: any = {
                 [titlePropertyName]: {
                     type: "title",
                     title: [
@@ -403,47 +485,140 @@ export class NotionService {
                 await this.ensureDatabaseProperties(databaseId);
             }
 
-            // Add metadata properties if provided
-            if (options.metadata?.category) {
-                properties.Category = {
-                    select: { name: options.metadata.category }
-                };
+            // Smart property setting for all metadata
+            if (options.metadata) {
+                // Handle description
+                if (options.metadata.description) {
+                    await this.setPropertyValue(
+                        properties, 
+                        'Description', 
+                        options.metadata.description, 
+                        databaseId
+                    );
+                }
+
+                // Handle category with smart detection
+                if (options.metadata.category) {
+                    await this.setPropertyValue(
+                        properties, 
+                        'Category', 
+                        options.metadata.category, 
+                        databaseId
+                    );
+                }
+
+                // Handle tags
+                if (options.metadata.tags && Array.isArray(options.metadata.tags)) {
+                    await this.setPropertyValue(
+                        properties, 
+                        'Tags', 
+                        options.metadata.tags, 
+                        databaseId
+                    );
+                }
+
+                // Handle status
+                if (options.metadata.status) {
+                    await this.setPropertyValue(
+                        properties, 
+                        'Status', 
+                        options.metadata.status, 
+                        databaseId
+                    );
+                }
             }
 
-            if (options.metadata?.tags && options.metadata.tags.length > 0) {
-                properties.Tags = {
-                    multi_select: options.metadata.tags.map(tag => ({ name: tag }))
-                };
-            }
+            // Create the page with retry logic for property type mismatches
+            let page: NotionPage;
+            let createdPageId: string | null = null;
+            let retryCount = 0;
+            const maxRetries = 1;
 
-            if (options.metadata?.description) {
-                properties.Description = {
-                    rich_text: [
-                        {
-                            text: { content: options.metadata.description }
+            while (retryCount <= maxRetries) {
+                try {
+                    page = await this.createPage({
+                        parent: { type: 'database_id' as const, database_id: databaseId },
+                        properties
+                    });
+                    createdPageId = page.id;
+                    break; // Success, exit loop
+                } catch (error: any) {
+                    if (
+                        retryCount < maxRetries && 
+                        error.message?.includes('is expected to be')
+                    ) {
+                        console.log('Property type mismatch detected, clearing cache and retrying...');
+                        // Clear cache to force re-detection
+                        this.propertyTypeCache.delete(databaseId);
+                        retryCount++;
+                        
+                        // Rebuild properties with fresh type detection
+                        properties = {
+                            [titlePropertyName]: {
+                                type: "title",
+                                title: [
+                                    {
+                                        type: "text",
+                                        text: {
+                                            content: pageTitle || 'Untitled'
+                                        }
+                                    }
+                                ]
+                            }
+                        };
+
+                        // Re-apply metadata with fresh detection
+                        if (options.metadata) {
+                            if (options.metadata.description) {
+                                await this.setPropertyValue(properties, 'Description', options.metadata.description, databaseId);
+                            }
+                            if (options.metadata.category) {
+                                await this.setPropertyValue(properties, 'Category', options.metadata.category, databaseId);
+                            }
+                            if (options.metadata.tags && Array.isArray(options.metadata.tags)) {
+                                await this.setPropertyValue(properties, 'Tags', options.metadata.tags, databaseId);
+                            }
+                            if (options.metadata.status) {
+                                await this.setPropertyValue(properties, 'Status', options.metadata.status, databaseId);
+                            }
                         }
-                    ]
-                };
+                    } else {
+                        // If we created a page but failed, clean it up
+                        if (createdPageId) {
+                            try {
+                                await this.archivePage(createdPageId);
+                                console.log('Cleaned up failed page creation:', createdPageId);
+                            } catch (cleanupError) {
+                                console.error('Failed to cleanup page:', cleanupError);
+                            }
+                        }
+                        throw error; // Re-throw if not a type mismatch or max retries reached
+                    }
+                }
             }
-
-            if (options.metadata?.status) {
-                properties.Status = {
-                    select: { name: options.metadata.status }
-                };
-            }
-
-            // Create the page with metadata
-            const page = await this.createPage({
-                parent: { type: 'database_id' as const, database_id: databaseId },
-                properties
-            });
 
             // Add blocks to the page if any, using chunked method for large documents
-            if (blocks.length > 0) {
-                await this.appendBlockChildrenChunked(page.id, blocks);
+            try {
+                if (blocks.length > 0) {
+                    await this.appendBlockChildrenChunked(page!.id, blocks);
+                }
+            } catch (error) {
+                // If block addition fails, clean up the page
+                if (page!) {
+                    try {
+                        await this.archivePage(page!.id);
+                        console.log('Cleaned up page after block addition failed:', page!.id);
+                    } catch (cleanupError) {
+                        console.error('Failed to cleanup page:', cleanupError);
+                    }
+                }
+                throw error;
             }
 
-            return { page, conversionResult };
+            console.log(`✅ Page created successfully with smart property detection`);
+            console.log(`   Property types detected:`, Array.from(this.propertyTypeCache.get(databaseId)?.entries() || []));
+
+            return { page: page!, conversionResult };
         } catch (error) {
             throw new Error(`Failed to create page from markdown: ${error}`);
         }
@@ -787,62 +962,52 @@ export class NotionService {
         try {
             const database = await this.getDatabase(databaseId);
             const existingProperties = database.properties;
+            const propertiesToCreate: any = {};
 
-            const requiredProperties: any = {};
-            let needsUpdate = false;
+            // Helper to check if property exists with correct type
+            const needsProperty = (name: string, expectedType: string): boolean => {
+                return !existingProperties[name] || existingProperties[name].type !== expectedType;
+            };
 
-            // Check for Category property
-            if (!existingProperties.Category) {
-                requiredProperties.Category = {
-                    type: 'select',
+            // Only add properties that don't exist or have wrong type
+            if (needsProperty('Description', 'rich_text')) {
+                propertiesToCreate['Description'] = { rich_text: {} };
+            }
+
+            if (needsProperty('Tags', 'multi_select')) {
+                propertiesToCreate['Tags'] = { multi_select: {} };
+            }
+
+            if (needsProperty('Status', 'select')) {
+                propertiesToCreate['Status'] = {
                     select: {
-                        options: [] // Start with empty options - Notion will auto-create new options
+                        options: [
+                            { name: 'published', color: 'green' },
+                            { name: 'draft', color: 'yellow' },
+                            { name: 'archived', color: 'gray' },
+                            { name: 'review', color: 'blue' }
+                        ]
                     }
                 };
-                needsUpdate = true;
             }
 
-            // Check for Tags property
-            if (!existingProperties.Tags) {
-                requiredProperties.Tags = {
-                    type: 'multi_select',
-                    multi_select: {
-                        options: [] // Start with empty options - Notion will auto-create new options
-                    }
-                };
-                needsUpdate = true;
+            // Don't create Category - respect existing configuration
+            if (!existingProperties['Category']) {
+                console.log('Note: Category property not found in database. Consider adding it manually as select or multi_select.');
+            } else {
+                console.log(`Category property exists as type: ${existingProperties['Category'].type}`);
             }
 
-            // Check for Description property
-            if (!existingProperties.Description) {
-                requiredProperties.Description = {
-                    type: 'rich_text',
-                    rich_text: {}
-                };
-                needsUpdate = true;
-            }
-
-            // Check for Status property
-            if (!existingProperties.Status) {
-                requiredProperties.Status = {
-                    type: 'select',
-                    select: {
-                        options: [] // Start with empty options - Notion will auto-create new options
-                    }
-                };
-                needsUpdate = true;
-            }
-
-            // Update database if needed
-            if (needsUpdate) {
+            // Only update if there are properties to add
+            if (Object.keys(propertiesToCreate).length > 0) {
                 await this.updateDatabase(databaseId, {
-                    properties: requiredProperties
+                    properties: propertiesToCreate
                 });
-                console.log('✅ Database properties updated with required metadata fields');
+                console.log('Updated database properties:', Object.keys(propertiesToCreate));
             }
         } catch (error) {
-            console.warn('Warning: Could not ensure database properties:', error);
-            // Don't throw error - metadata creation should still work even if property setup fails
+            console.error('Failed to ensure database properties:', error);
+            // Don't throw - continue with existing schema
         }
     }
 
