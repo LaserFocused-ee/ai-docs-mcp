@@ -70,12 +70,12 @@ export function initializeNotionService(): void {
 // HELPER FUNCTIONS
 // ========================================
 
-// Add emoji indicators for search modes - currently unused but may be used later
-// const SEARCH_MODE_ICONS = {
-//     'tags': '🏷️',
-//     'full-text': '📄',
-//     'combined': '🔍'
-// };
+// Add emoji indicators for search modes
+const SEARCH_MODE_ICONS = {
+    'tags': '🏷️',
+    'full-text': '📄',
+    'combined': '🔍',
+};
 
 // Add match location indicators
 const MATCH_LOCATION_ICONS = {
@@ -92,8 +92,11 @@ function formatEnhancedSearchResults(results: EnhancedSearchResult[], stats: Sea
     const lines: string[] = [];
 
     // Header with search mode
+    const searchMode = stats.searchMode as keyof typeof SEARCH_MODE_ICONS;
+    const modeIcon = SEARCH_MODE_ICONS[searchMode] ?? '🔍';
+
     lines.push(`📋 Search Results (${stats.totalResults} found)`);
-    lines.push(`🔍 Search mode: ${stats.searchMode.toUpperCase()}`);
+    lines.push(`${modeIcon} Search mode: ${stats.searchMode.toUpperCase()}`);
     lines.push(`📝 Search term: "${stats.searchTerm}"`);
     lines.push(`⏱️ Search time: ${stats.executionTime}ms`);
     lines.push('');
@@ -172,7 +175,10 @@ function formatEnhancedSearchResults(results: EnhancedSearchResult[], stats: Sea
 function formatNoResultsMessage(searchTerm: string, searchMode: string): string {
     const lines: string[] = [];
 
-    lines.push(`🔍 No results found for "${searchTerm}" in ${searchMode} mode`);
+    const mode = searchMode as keyof typeof SEARCH_MODE_ICONS;
+    const modeIcon = SEARCH_MODE_ICONS[mode] ?? '🔍';
+
+    lines.push(`${modeIcon} No results found for "${searchTerm}" in ${searchMode.toUpperCase()} mode`);
     lines.push('');
     lines.push('💡 **Suggestions:**');
 
