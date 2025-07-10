@@ -182,7 +182,19 @@ export async function listDatabasePagesTool({
             const lastEdited = new Date(page.last_edited_time).toLocaleDateString();
             const created = new Date(page.created_time).toLocaleDateString();
 
-            let pageInfo = `• **${title}**\n  ID: ${page.id}`;
+            let pageInfo = `• **${title}**`;
+
+            // For combined mode, indicate if match is from tags
+            if (searchMode === 'combined' && search !== undefined && search !== '') {
+                const matchedInTags = tags.some((tag) =>
+                    tag.toLowerCase().includes(search.toLowerCase()),
+                );
+                if (matchedInTags) {
+                    pageInfo += ' [Tag match]';
+                }
+            }
+
+            pageInfo += `\n  ID: ${page.id}`;
             if (category !== '') {pageInfo += `\n  Category: ${category}`;}
             if (status !== '') {pageInfo += `\n  Status: ${status}`;}
             if (tags.length > 0) {pageInfo += `\n  Tags: ${tags.join(', ')}`;}
@@ -198,6 +210,18 @@ export async function listDatabasePagesTool({
             headerText += ', more available';
         }
         headerText += ')';
+
+        // Add search mode indicator if searching
+        if (search !== undefined && search !== '') {
+            headerText += '\n**Search mode:** ';
+            if (searchMode === 'tags') {
+                headerText += 'tags (searching in tags only)';
+            } else if (searchMode === 'full-text') {
+                headerText += 'full-text (searching in all content)';
+            } else if (searchMode === 'combined') {
+                headerText += 'combined (searching everywhere)';
+            }
+        }
 
         // Add active filters info
         const activeFilters: string[] = [];
