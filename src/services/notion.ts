@@ -774,6 +774,7 @@ export class NotionService {
             sortBy?: 'title' | 'last_edited' | 'created' | 'category' | 'status';
             sortOrder?: 'ascending' | 'descending';
             startCursor?: string;
+            searchMode?: 'tags' | 'full-text' | 'combined';
         } = {},
     ): Promise<NotionDatabaseQueryResults> {
         try {
@@ -786,6 +787,7 @@ export class NotionService {
                 sortBy = 'last_edited',
                 sortOrder = 'descending',
                 startCursor,
+                searchMode = 'tags',
             } = options;
 
             // Get the title property name for this database
@@ -794,24 +796,59 @@ export class NotionService {
             // Build filter conditions
             const filters: Record<string, unknown>[] = [];
 
-            // Text search across title and description
+            // Text search based on searchMode
             if (search !== undefined) {
-                filters.push({
-                    or: [
-                        {
-                            property: titlePropertyName,
-                            title: {
-                                contains: search,
-                            },
+                if (searchMode === 'tags') {
+                    // Search only in tags
+                    filters.push({
+                        property: 'Tags',
+                        multi_select: {
+                            contains: search,
                         },
-                        {
-                            property: 'Description',
-                            rich_text: {
-                                contains: search,
+                    });
+                } else if (searchMode === 'full-text') {
+                    // Search in title and description (current behavior)
+                    filters.push({
+                        or: [
+                            {
+                                property: titlePropertyName,
+                                title: {
+                                    contains: search,
+                                },
                             },
-                        },
-                    ],
-                });
+                            {
+                                property: 'Description',
+                                rich_text: {
+                                    contains: search,
+                                },
+                            },
+                        ],
+                    });
+                } else if (searchMode === 'combined') {
+                    // Search everywhere: tags, title, and description
+                    filters.push({
+                        or: [
+                            {
+                                property: 'Tags',
+                                multi_select: {
+                                    contains: search,
+                                },
+                            },
+                            {
+                                property: titlePropertyName,
+                                title: {
+                                    contains: search,
+                                },
+                            },
+                            {
+                                property: 'Description',
+                                rich_text: {
+                                    contains: search,
+                                },
+                            },
+                        ],
+                    });
+                }
             }
 
             // Category filter

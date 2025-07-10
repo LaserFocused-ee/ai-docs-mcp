@@ -99,6 +99,7 @@ export async function listDatabasePagesTool({
     sortBy = 'last_edited',
     sortOrder = 'descending',
     startCursor,
+    searchMode = 'tags',
 }: {
     limit?: number;
     search?: string;
@@ -108,6 +109,7 @@ export async function listDatabasePagesTool({
     sortBy?: 'title' | 'last_edited' | 'created' | 'category' | 'status';
     sortOrder?: 'ascending' | 'descending';
     startCursor?: string;
+    searchMode?: 'tags' | 'full-text' | 'combined';
 }): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
     try {
         if (notionService === undefined) {
@@ -138,6 +140,7 @@ export async function listDatabasePagesTool({
             sortBy,
             sortOrder,
             startCursor,
+            searchMode,
         }) as NotionDatabaseResult;
 
         if (result.results.length === 0) {
@@ -723,6 +726,7 @@ export function configureNotionTools(server: McpServer): void {
             sortBy: z.enum(['title', 'last_edited', 'created', 'category', 'status']).optional().describe('Sort field (default: last_edited). Use "last_edited" for newest content, "title" for alphabetical, "created" for chronological, "category" to group by type.'),
             sortOrder: z.enum(['ascending', 'descending']).optional().describe('Sort direction (default: descending). Descending shows newest/latest first, ascending shows oldest/earliest first.'),
             startCursor: z.string().optional().describe('Pagination cursor from previous response to get next page of results. Only use if previous response indicated "has_more: true".'),
+            searchMode: z.enum(['tags', 'full-text', 'combined']).default('tags').optional().describe('Search mode controls where to search. "tags" (default): Search only in page tags for better relevance. "full-text": Search in all content (previous behavior). "combined": Search everywhere but indicate tag matches.'),
         },
         async (args: {
             limit?: number;
@@ -733,6 +737,7 @@ export function configureNotionTools(server: McpServer): void {
             sortBy?: 'title' | 'last_edited' | 'created' | 'category' | 'status';
             sortOrder?: 'ascending' | 'descending';
             startCursor?: string;
+            searchMode?: 'tags' | 'full-text' | 'combined';
         }) => {
             return listDatabasePagesTool(args);
         },
