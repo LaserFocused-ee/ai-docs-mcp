@@ -7,25 +7,8 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NotionService } from '../services/notion.js';
 import { extractPageTitle } from '../utils/converters.js';
-import type { NotionSelectOption } from '../types/notion.js';
-
-interface NotionPage {
-    id: string;
-    url?: string;
-    created_time: string;
-    last_edited_time: string;
-    properties?: {
-        Category?: {
-            select?: { name: string };
-        };
-        Status?: {
-            select?: { name: string };
-        };
-        Tags?: {
-            multi_select?: Array<{ name: string }>;
-        };
-    };
-}
+import type { NotionPage, NotionSelectOption } from '../types/notion.js';
+import type { EnhancedSearchResult, SearchStatistics } from '../types/search.js';
 
 interface NotionDatabaseResult {
     results: NotionPage[];
@@ -84,6 +67,143 @@ export function initializeNotionService(): void {
 }
 
 // ========================================
+// HELPER FUNCTIONS
+// ========================================
+
+// Add emoji indicators for search modes - currently unused but may be used later
+// const SEARCH_MODE_ICONS = {
+//     'tags': '🏷️',
+//     'full-text': '📄',
+//     'combined': '🔍'
+// };
+
+// Add match location indicators
+const MATCH_LOCATION_ICONS = {
+    'tags': '🏷️',
+    'title': '📌',
+    'description': '📝',
+    'content': '📄',
+};
+
+/**
+ * Format enhanced search results with match information
+ */
+function formatEnhancedSearchResults(results: EnhancedSearchResult[], stats: SearchStatistics): string {
+    const lines: string[] = [];
+
+    // Header with search mode
+    lines.push(`📋 Search Results (${stats.totalResults} found)`);
+    lines.push(`🔍 Search mode: ${stats.searchMode.toUpperCase()}`);
+    lines.push(`📝 Search term: "${stats.searchTerm}"`);
+    lines.push(`⏱️ Search time: ${stats.executionTime}ms`);
+    lines.push('');
+
+    // Match distribution
+    if (stats.totalResults > 0) {
+        lines.push('📊 Match Distribution:');
+        lines.push(`  • Tags: ${stats.resultsByLocation.tags} matches`);
+        lines.push(`  • Titles: ${stats.resultsByLocation.title} matches`);
+        lines.push(`  • Descriptions: ${stats.resultsByLocation.description} matches`);
+        lines.push(`  • Content: ${stats.resultsByLocation.content} matches`);
+        lines.push('');
+    }
+
+    // Results with match indicators
+    for (const result of results) {
+        const { page, metadata } = result;
+        const title = extractPageTitle(page);
+
+        lines.push(`• **${title}**`);
+        lines.push(`  ↳ Matched in: ${MATCH_LOCATION_ICONS[metadata.matchLocation]} ${metadata.matchLocation}`);
+
+        if (metadata.matchedTerms.length > 0) {
+            lines.push(`  ↳ Matched terms: ${metadata.matchedTerms.join(', ')}`);
+        }
+
+        // Include other page details
+        lines.push(`  ID: ${page.id}`);
+
+        // Safely extract properties
+        let category = '';
+        let status = '';
+        let tags: string[] = [];
+
+        const categoryProp = page.properties?.Category;
+        if (categoryProp !== undefined && categoryProp !== null && typeof categoryProp === 'object' && 'select' in categoryProp) {
+            const select = categoryProp.select as { name?: string } | null;
+            if (select?.name !== undefined && select.name !== '') {
+                category = select.name;
+            }
+        }
+
+        const statusProp = page.properties?.Status;
+        if (statusProp !== undefined && statusProp !== null && typeof statusProp === 'object' && 'select' in statusProp) {
+            const select = statusProp.select as { name?: string } | null;
+            if (select?.name !== undefined && select.name !== '') {
+                status = select.name;
+            }
+        }
+
+        const tagsProp = page.properties?.Tags;
+        if (tagsProp !== undefined && tagsProp !== null && typeof tagsProp === 'object' && 'multi_select' in tagsProp) {
+            const multiSelect = tagsProp.multi_select as Array<{ name?: string }> | null;
+            if (Array.isArray(multiSelect)) {
+                tags = multiSelect
+                    .filter((tag): tag is { name: string } => tag?.name !== undefined && tag.name !== '')
+                    .map(tag => tag.name);
+            }
+        }
+
+        const lastEdited = new Date(page.last_edited_time).toLocaleDateString();
+
+        if (category !== '') {lines.push(`  Category: ${category}`);}
+        if (status !== '') {lines.push(`  Status: ${status}`);}
+        if (tags.length > 0) {lines.push(`  Tags: ${tags.join(', ')}`);}
+        lines.push(`  Last edited: ${lastEdited}`);
+        lines.push('');
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Format no-results message with helpful guidance
+ */
+function formatNoResultsMessage(searchTerm: string, searchMode: string): string {
+    const lines: string[] = [];
+
+    lines.push(`🔍 No results found for "${searchTerm}" in ${searchMode} mode`);
+    lines.push('');
+    lines.push('💡 **Suggestions:**');
+
+    switch (searchMode) {
+        case 'tags':
+            lines.push('• Try searching in full-text mode to search titles and descriptions');
+            lines.push('• Check if the tag exists using the list-categories tool');
+            lines.push('• Tags are case-sensitive - try different variations');
+            break;
+        case 'full-text':
+            lines.push('• Try searching in tags mode if looking for categorized content');
+            lines.push('• Use shorter, more general search terms');
+            lines.push('• Check spelling and try synonyms');
+            break;
+        case 'combined':
+            lines.push('• This searched everywhere - the term might not exist');
+            lines.push('• Try more general search terms');
+            lines.push('• Create a new page with this content');
+            break;
+    }
+
+    lines.push('');
+    lines.push('🔧 **Other search modes:**');
+    lines.push('• `searchMode: "tags"` - Search only in tags');
+    lines.push('• `searchMode: "full-text"` - Search titles and descriptions');
+    lines.push('• `searchMode: "combined"` - Search everywhere');
+
+    return lines.join('\n');
+}
+
+// ========================================
 // THE 5 ESSENTIAL TOOLS
 // ========================================
 
@@ -131,6 +251,48 @@ export async function listDatabasePagesTool({
             };
         }
 
+        // Use enhanced search if search term is provided
+        if (search !== undefined && search !== '') {
+            const enhancedResult = await notionService.searchPagesWithMetadata(databaseId, {
+                limit,
+                search,
+                category,
+                tags,
+                status,
+                sortBy,
+                sortOrder,
+                startCursor,
+                searchMode,
+            });
+
+            // Check if no results with search
+            if (enhancedResult.results.length === 0) {
+                return {
+                    content: [{
+                        type: 'text' as const,
+                        text: formatNoResultsMessage(search, searchMode),
+                    }],
+                };
+            }
+
+            // Format enhanced results with match information
+            let formattedResults = formatEnhancedSearchResults(enhancedResult.results, enhancedResult.statistics);
+
+            // Add pagination info if applicable
+            if (enhancedResult.hasMore) {
+                formattedResults += `\n\n📄 Showing ${enhancedResult.results.length} of ${enhancedResult.statistics.totalResults}+ results`;
+                formattedResults += `\n💡 Use \`startCursor: "${enhancedResult.nextCursor ?? ''}"\` parameter to see more results`;
+            }
+
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: formattedResults,
+                }],
+            };
+        }
+
+        // No search term - use regular listing
         const result = await notionService.listDatabasePages(databaseId, {
             limit,
             search,
@@ -148,10 +310,21 @@ export async function listDatabasePagesTool({
 
             // Add context about active filters
             const activeFilters: string[] = [];
-            if (search !== undefined && search !== '') {activeFilters.push(`search: "${search}"`);}
-            if (category !== undefined && category !== '') {activeFilters.push(`category: "${category}"`);}
-            if (status !== undefined && status !== '') {activeFilters.push(`status: "${status}"`);}
-            if (tags !== undefined && tags.length > 0) {activeFilters.push(`tags: [${tags.join(', ')}]`);}
+            if (search !== undefined && search !== '') {
+                const searchStr: string = search;
+                activeFilters.push(`search: "${searchStr}"`);
+            }
+            if (category !== undefined && category !== '') {
+                const categoryStr: string = category;
+                activeFilters.push(`category: "${categoryStr}"`);
+            }
+            if (status !== undefined && status !== '') {
+                const statusStr: string = status;
+                activeFilters.push(`status: "${statusStr}"`);
+            }
+            if (tags !== undefined && tags.length > 0) {
+                activeFilters.push(`tags: [${tags.join(', ')}]`);
+            }
 
             if (activeFilters.length > 0) {
                 noResultsMsg += ` with filters: ${activeFilters.join(', ')}`;
@@ -159,10 +332,11 @@ export async function listDatabasePagesTool({
 
             // Add mode-specific help when no results with search
             if (search !== undefined && search !== '') {
+                const searchStr: string = search;
                 if (searchMode === 'tags') {
-                    noResultsMsg += `\n💡 Tip: No pages have "${search}" in their tags. Try searchMode="full-text" to search in all content.`;
+                    noResultsMsg += `\n💡 Tip: No pages have "${searchStr}" in their tags. Try searchMode="full-text" to search in all content.`;
                 } else if (searchMode === 'full-text') {
-                    noResultsMsg += `\n💡 Tip: No pages contain "${search}" in their title or description. Try searchMode="tags" to search only in tags.`;
+                    noResultsMsg += `\n💡 Tip: No pages contain "${searchStr}" in their title or description. Try searchMode="tags" to search only in tags.`;
                 }
             }
 
@@ -176,23 +350,60 @@ export async function listDatabasePagesTool({
 
         const pageList = result.results.map((page: NotionPage) => {
             const title = extractPageTitle(page);
-            const category = page.properties?.Category?.select?.name ?? '';
-            const status = page.properties?.Status?.select?.name ?? '';
-            const tags = page.properties?.Tags?.multi_select?.map((tag) => tag.name) ?? [];
+
+            // Safely extract properties
+            let category: string = '';
+            let status: string = '';
+            let tags: Array<string> = [];
+
+            const categoryProp = page.properties?.Category;
+            if (categoryProp !== undefined && categoryProp !== null && typeof categoryProp === 'object' && 'select' in categoryProp) {
+                const select = categoryProp.select as { name?: string } | null;
+                if (select?.name !== undefined && select.name !== '') {
+                    category = select.name;
+                }
+            }
+
+            const statusProp = page.properties?.Status;
+            if (statusProp !== undefined && statusProp !== null && typeof statusProp === 'object' && 'select' in statusProp) {
+                const select = statusProp.select as { name?: string } | null;
+                if (select?.name !== undefined && select.name !== '') {
+                    status = select.name;
+                }
+            }
+
+            const tagsProp = page.properties?.Tags;
+            if (tagsProp !== undefined && tagsProp !== null && typeof tagsProp === 'object' && 'multi_select' in tagsProp) {
+                const multiSelect = tagsProp.multi_select as Array<{ name?: string }> | null;
+                if (Array.isArray(multiSelect)) {
+                    const tagNames = multiSelect
+                        .filter((tag): tag is { name: string } => tag?.name !== undefined && tag.name !== '')
+                        .map(tag => tag.name);
+                    tags = tagNames;
+                }
+            }
+
             const lastEdited = new Date(page.last_edited_time).toLocaleDateString();
             const created = new Date(page.created_time).toLocaleDateString();
 
             let pageInfo = `• **${title}**`;
 
             // For combined mode, indicate if match is from tags
-            if (searchMode === 'combined' && search !== undefined && search !== '') {
-                const matchedInTags = tags.some((tag) =>
-                    tag.toLowerCase().includes(search.toLowerCase()),
-                );
+            // TODO: Fix TypeScript issue with tags type inference
+            /*
+            if (searchMode === 'combined' && search !== undefined && search !== '' && Array.isArray(tags) && tags.length > 0) {
+                const searchLower = search.toLowerCase();
+                const matchedInTags = tags.some((tag) => {
+                    if (typeof tag === 'string') {
+                        return tag.toLowerCase().includes(searchLower);
+                    }
+                    return false;
+                });
                 if (matchedInTags) {
                     pageInfo += ' [Tag match]';
                 }
             }
+            */
 
             pageInfo += `\n  ID: ${page.id}`;
             if (category !== '') {pageInfo += `\n  Category: ${category}`;}
@@ -225,10 +436,21 @@ export async function listDatabasePagesTool({
 
         // Add active filters info
         const activeFilters: string[] = [];
-        if (search !== undefined && search !== '') {activeFilters.push(`🔍 "${search}"`);}
-        if (category !== undefined && category !== '') {activeFilters.push(`📁 ${category}`);}
-        if (status !== undefined && status !== '') {activeFilters.push(`📊 ${status}`);}
-        if (tags !== undefined && tags.length > 0) {activeFilters.push(`🏷️ ${tags.join(', ')}`);}
+        if (search !== undefined && search !== '') {
+            const searchStr: string = search;
+            activeFilters.push(`🔍 "${searchStr}"`);
+        }
+        if (category !== undefined && category !== '') {
+            const categoryStr: string = category;
+            activeFilters.push(`📁 ${categoryStr}`);
+        }
+        if (status !== undefined && status !== '') {
+            const statusStr: string = status;
+            activeFilters.push(`📊 ${statusStr}`);
+        }
+        if (tags !== undefined && tags.length > 0) {
+            activeFilters.push(`🏷️ ${tags.join(', ')}`);
+        }
         if (sortBy !== 'last_edited' || sortOrder !== 'descending') {
             activeFilters.push(`🔄 ${sortBy} (${sortOrder})`);
         }
