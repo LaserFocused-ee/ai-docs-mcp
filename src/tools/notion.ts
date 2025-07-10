@@ -749,7 +749,7 @@ export function configureNotionTools(server: McpServer): void {
     // Tool 1: List/Query/Search Database Pages
     server.tool(
         'list-database-pages',
-        'Query and search documentation pages in the Notion database. Supports advanced filtering by search terms, categories, tags, status, and flexible sorting. Perfect for AI agents to find relevant documentation based on current context.',
+        'Query and search documentation pages in the Notion database. Supports advanced filtering by search terms, categories, tags, status, and flexible sorting. NEW: Use searchMode parameter to control search behavior - \'tags\' (default) for better relevance, \'full-text\' for previous behavior, or \'combined\' to search everywhere with tag match indicators.',
         {
             limit: z.number().optional().describe('Maximum number of pages to return (default: 10, max: 100). Use smaller limits for focused results.'),
             search: z.string().optional().describe('Search text that will be matched against page titles and descriptions. Case-insensitive partial matching. Example: "riverpod testing" finds pages with those terms.'),
