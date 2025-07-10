@@ -157,6 +157,15 @@ export async function listDatabasePagesTool({
                 noResultsMsg += ` with filters: ${activeFilters.join(', ')}`;
             }
 
+            // Add mode-specific help when no results with search
+            if (search !== undefined && search !== '') {
+                if (searchMode === 'tags') {
+                    noResultsMsg += `\n💡 Tip: No pages have "${search}" in their tags. Try searchMode="full-text" to search in all content.`;
+                } else if (searchMode === 'full-text') {
+                    noResultsMsg += `\n💡 Tip: No pages contain "${search}" in their title or description. Try searchMode="tags" to search only in tags.`;
+                }
+            }
+
             return {
                 content: [{
                     type: 'text' as const,
