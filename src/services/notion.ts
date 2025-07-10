@@ -16,6 +16,7 @@ import {
     UpdatePageRequest,
 } from '../types/notion.js';
 import { ConversionOptions, ConversionResult } from '../types/markdown.js';
+import { EnhancedSearchResult, SearchResultMetadata, SearchStatistics } from '../types/search.js';
 import { extractPageTitle, extractTitleFromMarkdown, markdownToNotion, notionToMarkdown } from '../utils/converters.js';
 import { NotionBlockData } from '../utils/notion-blocks.js';
 import { readMarkdownFile, validateFilePath } from '../utils/file-system.js';
@@ -28,6 +29,61 @@ export class NotionService {
 
     constructor(config: NotionConfig) {
         this.config = config;
+    }
+
+    private analyzeSearchMatch(page: NotionPage, searchTerm: string, searchMode: string): SearchResultMetadata {
+        const metadata: SearchResultMetadata = {
+            searchMode: searchMode as 'tags' | 'full-text' | 'combined',
+            matchLocation: 'content',
+            matchedTerms: [],
+        };
+
+        const term = searchTerm.toLowerCase();
+
+        // Check tags property - safely access the multi_select array
+        const tagsProperty = page.properties.Tags;
+        if (tagsProperty !== undefined && tagsProperty !== null && 'multi_select' in tagsProperty) {
+            const multiSelect = tagsProperty.multi_select as Array<{ name: string; color?: string; id?: string }>;
+            if (Array.isArray(multiSelect)) {
+                const matchingTags = multiSelect.filter(tag =>
+                    tag?.name !== undefined && tag.name !== null && tag.name !== '' && tag.name.toLowerCase().includes(term),
+                );
+                if (matchingTags.length > 0) {
+                    metadata.matchLocation = 'tags';
+                    metadata.matchedTerms = matchingTags.map(tag => tag.name);
+                }
+            }
+        }
+
+        // Check title - find the property with type 'title'
+        const titleProperty = Object.values(page.properties).find(prop =>
+            prop !== undefined && prop !== null && typeof prop === 'object' && 'type' in prop && prop.type === 'title',
+        );
+        if (titleProperty !== undefined && titleProperty !== null && 'title' in titleProperty) {
+            const titleArray = titleProperty.title as Array<{ type: string; text?: { content: string } }>;
+            if (Array.isArray(titleArray) && titleArray[0]?.text?.content !== undefined && titleArray[0].text.content !== '') {
+                const titleText = titleArray[0].text.content.toLowerCase();
+                if (titleText.includes(term)) {
+                    metadata.matchLocation = 'title';
+                    metadata.matchedTerms = [searchTerm];
+                }
+            }
+        }
+
+        // Check description property
+        const descProperty = page.properties.Description;
+        if (descProperty !== undefined && descProperty !== null && 'rich_text' in descProperty) {
+            const richTextArray = descProperty.rich_text as Array<{ type: string; text?: { content: string } }>;
+            if (Array.isArray(richTextArray) && richTextArray[0]?.text?.content !== undefined && richTextArray[0].text.content !== '') {
+                const descText = richTextArray[0].text.content.toLowerCase();
+                if (descText.includes(term)) {
+                    metadata.matchLocation = 'description';
+                    metadata.matchedTerms = [searchTerm];
+                }
+            }
+        }
+
+        return metadata;
     }
 
     private async getPropertyType(databaseId: string, propertyName: string): Promise<string | null> {
@@ -541,7 +597,7 @@ export class NotionService {
                     createdPageId = page.id;
 
                     if (debug) {
-                        console.log(`[DEBUG] Created page with ID: ${page.id}`);
+                        // Page created successfully with ID: page.id
                     }
                     break; // Success, exit loop
                 } catch (error: unknown) {
@@ -591,9 +647,9 @@ export class NotionService {
                             try {
                                 await this.archivePage(createdPageId);
                                 cleanupSuccessful = true;
-                                console.log(`Cleaned up orphaned page ${createdPageId} after page creation failure`);
-                            } catch (cleanupError) {
-                                console.error(`Failed to cleanup orphaned page ${createdPageId}:`, cleanupError);
+                                // Successfully cleaned up orphaned page after creation failure
+                            } catch {
+                                // Failed to cleanup orphaned page - manual cleanup may be required
                             }
 
                             // Enhance error message with cleanup status
@@ -621,9 +677,9 @@ export class NotionService {
                 try {
                     await this.archivePage(page!.id);
                     cleanupSuccessful = true;
-                    console.log(`Cleaned up orphaned page ${page!.id} after block creation failure`);
-                } catch (cleanupError) {
-                    console.error(`Failed to cleanup orphaned page ${page!.id}:`, cleanupError);
+                    // Successfully cleaned up orphaned page after block creation failure
+                } catch {
+                    // Failed to cleanup orphaned page - manual cleanup may be required
                 }
 
                 // Enhance error message based on failure type and cleanup result
@@ -1003,6 +1059,76 @@ export class NotionService {
         } catch (error) {
             throw new Error(`Failed to query database pages: ${String(error)}`);
         }
+    }
+
+    /**
+     * Enhanced version of listDatabasePages that includes search match metadata
+     */
+    async searchPagesWithMetadata(
+        databaseId: string,
+        options: {
+            limit?: number;
+            search?: string;
+            category?: string;
+            tags?: string[];
+            status?: string;
+            sortBy?: 'title' | 'last_edited' | 'created' | 'category' | 'status';
+            sortOrder?: 'ascending' | 'descending';
+            startCursor?: string;
+            searchMode?: 'tags' | 'full-text' | 'combined';
+        } = {},
+    ): Promise<{
+        results: EnhancedSearchResult[];
+        statistics: SearchStatistics;
+        hasMore: boolean;
+        nextCursor?: string;
+    }> {
+        const startTime = Date.now();
+        const searchMode = options.searchMode ?? 'tags';
+        const searchTerm = options.search ?? '';
+
+        // Get the regular results
+        const response = await this.listDatabasePages(databaseId, options);
+
+        // Analyze results
+        const enhancedResults: EnhancedSearchResult[] = [];
+        const stats: SearchStatistics = {
+            totalResults: 0,
+            resultsByLocation: { tags: 0, title: 0, description: 0, content: 0 },
+            searchMode: searchMode,
+            searchTerm: searchTerm,
+            executionTime: 0,
+        };
+
+        // Process each result to add metadata
+        for (const page of response.results) {
+            let metadata: SearchResultMetadata;
+
+            if (searchTerm !== '') {
+                metadata = this.analyzeSearchMatch(page, searchTerm, searchMode);
+            } else {
+                // No search term - default metadata
+                metadata = {
+                    searchMode: searchMode,
+                    matchLocation: 'content',
+                    matchedTerms: [],
+                };
+            }
+
+            enhancedResults.push({ page, metadata });
+
+            stats.totalResults++;
+            stats.resultsByLocation[metadata.matchLocation]++;
+        }
+
+        stats.executionTime = Date.now() - startTime;
+
+        return {
+            results: enhancedResults,
+            statistics: stats,
+            hasMore: response.has_more,
+            nextCursor: response.next_cursor ?? undefined,
+        };
     }
 
     /**
