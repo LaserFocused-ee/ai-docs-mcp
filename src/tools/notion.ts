@@ -779,7 +779,7 @@ export function configureNotionTools(server: McpServer): void {
     // Tool 2: Create Page from Markdown
     server.tool(
         'create-page-from-markdown',
-        'Create a new documentation page in Notion from markdown content or a markdown file. Automatically converts markdown syntax to Notion blocks and sets proper metadata. Choose either markdown content OR filePath, not both.',
+        'Create a new documentation page in Notion from markdown content or a markdown file. Automatically converts markdown syntax to Notion blocks and sets proper metadata. Choose either markdown content OR filePath, not both. If page creation fails after the page is created, it will be automatically archived to prevent orphaned pages.',
         {
             markdown: z.string().optional().describe('Raw markdown content to convert and create as a page. Supports standard markdown: headers, lists, code blocks, links, etc. Cannot be used with filePath.'),
             filePath: z.string().optional().describe('Absolute file system path to markdown file (e.g., "/Users/username/code/ai-docs-mcp/mcp_server/docs/code_guidelines/flutter/architecture/providers.md"). File will be read and converted. Cannot be used with markdown.'),

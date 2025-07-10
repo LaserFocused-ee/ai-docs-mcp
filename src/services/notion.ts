@@ -422,6 +422,8 @@ export class NotionService {
             };
         },
     ): Promise<{ page: NotionPage; conversionResult: ConversionResult }> {
+        const debug = process.env.NODE_ENV === 'development';
+
         try {
             let markdown: string;
             let { pageTitle } = options;
@@ -537,6 +539,10 @@ export class NotionService {
                         properties,
                     });
                     createdPageId = page.id;
+
+                    if (debug) {
+                        console.log(`[DEBUG] Created page with ID: ${page.id}`);
+                    }
                     break; // Success, exit loop
                 } catch (error: unknown) {
                     if (
@@ -581,11 +587,22 @@ export class NotionService {
                     } else {
                         // If we created a page but failed, clean it up
                         if (createdPageId !== null) {
+                            let cleanupSuccessful = false;
                             try {
                                 await this.archivePage(createdPageId);
-                                // Page cleanup completed
-                            } catch {
-                                // Cleanup failed, but original error is more important
+                                cleanupSuccessful = true;
+                                console.log(`Cleaned up orphaned page ${createdPageId} after page creation failure`);
+                            } catch (cleanupError) {
+                                console.error(`Failed to cleanup orphaned page ${createdPageId}:`, cleanupError);
+                            }
+
+                            // Enhance error message with cleanup status
+                            if (error instanceof Error) {
+                                if (cleanupSuccessful) {
+                                    error.message += '\n\n✅ Cleanup: The partially created page has been archived.';
+                                } else {
+                                    error.message += `\n\n⚠️ Note: A partially created page may remain in your database. Page ID: ${createdPageId}`;
+                                }
                             }
                         }
                         throw error; // Re-throw if not a type mismatch or max retries reached
@@ -600,12 +617,34 @@ export class NotionService {
                 }
             } catch (error) {
                 // If block addition fails, clean up the page
+                let cleanupSuccessful = false;
                 try {
                     await this.archivePage(page!.id);
-                    // Page cleanup completed after block addition failed
-                } catch {
-                    // Cleanup failed, but original error is more important
+                    cleanupSuccessful = true;
+                    console.log(`Cleaned up orphaned page ${page!.id} after block creation failure`);
+                } catch (cleanupError) {
+                    console.error(`Failed to cleanup orphaned page ${page!.id}:`, cleanupError);
                 }
+
+                // Enhance error message based on failure type and cleanup result
+                if (error instanceof Error) {
+                    let enhancedMessage = error.message;
+
+                    if (error.message.includes('block_validation_error') || error.message.includes('should be ≤')) {
+                        enhancedMessage = `❌ Block validation failed: ${error.message}`;
+                    } else if (error.message.includes('rate_limited')) {
+                        enhancedMessage = `⏱️ Rate limit exceeded: ${error.message}`;
+                    }
+
+                    if (cleanupSuccessful) {
+                        enhancedMessage += '\n\n✅ Cleanup: The partially created page has been archived.';
+                    } else {
+                        enhancedMessage += `\n\n⚠️ Note: A partially created page may remain in your database. Page ID: ${page!.id}`;
+                    }
+
+                    error.message = enhancedMessage;
+                }
+
                 throw error;
             }
 
